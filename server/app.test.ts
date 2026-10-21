@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { startApp } from "./test-app.ts";
+import { createOwner, startApp } from "./test-app.ts";
 
 let app: Awaited<ReturnType<typeof startApp>>;
 
@@ -35,5 +35,16 @@ describe("health and metrics", () => {
 
   it("offers the one-time owner link until there is an owner", () => {
     expect(app.auth.setupLink()).toMatch(/^http:\/\/localhost:\d+\//);
+  });
+});
+
+describe("other products", () => {
+  it("lists the configured products to anyone signed in", async () => {
+    const products = [{ id: "infrastructure", url: "https://infra.example.com" }];
+    const linked = await startApp({ version: "1.2.3", products });
+    const owner = await createOwner(linked);
+    expect(await owner.json("/api/v1/products")).toEqual({ status: 200, body: { products } });
+    expect((await fetch(`${linked.base}/api/v1/products`)).status).toBe(401);
+    await linked.close();
   });
 });

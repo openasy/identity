@@ -49,6 +49,7 @@ are on http://localhost:8080; the API reference is at http://localhost:8080/api/
 | `PORT` | `8080` | HTTP port |
 | `IDENTITY_DB` | `/data/identity.db` | SQLite file (WAL), on the `/data` volume |
 | `IDENTITY_PUBLIC_URL` | `http://localhost:8080` | The address people and applications open, with `https://` behind your TLS proxy. It is the OpenID issuer: keep it fixed once applications use it |
+| `OPENASY_PRODUCTS` | | The install's other OpenAsy products, for the product switcher: `vpn=https://vpn.example.com,infrastructure=https://infra.example.com`. Give every product the same value |
 | `IDENTITY_SECRETS_KEY_FILE` | `/run/secrets/openasy-kek` | 32-byte key-encryption key; required |
 | `IDENTITY_PASSWORD_SIGN_IN` | `true` | `false` when the people who manage Identity sign in through another provider |
 | `IDENTITY_OIDC_*` | | Sign in to Identity itself through another provider, as in every OpenAsy product; owners can also add providers under Settings, Sign-in |
@@ -85,6 +86,7 @@ User for people nobody invited; they join the directory at their first sign-in. 
 | `/healthz`, `/readyz` | Liveness and readiness |
 | `/metrics` | Prometheus metrics |
 | `GET /api/v1/version` | Product and version |
+| `GET /api/v1/products` | The other OpenAsy products, from `OPENASY_PRODUCTS` |
 | `/.well-known/openid-configuration`, `/oidc/*` | The OpenID provider: the issuer is `IDENTITY_PUBLIC_URL` |
 | `/saml/metadata`, `/saml/sso`, `/saml/certificate` | The SAML identity provider: the entity ID is `IDENTITY_PUBLIC_URL/saml` |
 | `/scim/v2` | SCIM 2.0 Users and Groups, with the provisioning token |

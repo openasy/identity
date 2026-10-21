@@ -7,6 +7,7 @@ import { openDb } from "./db.ts";
 import { createDirectory } from "./directory.ts";
 import { createKeyring } from "./kek.ts";
 import { log } from "./log.ts";
+import { parseProducts } from "./products.ts";
 import { createOidc } from "./oidc.ts";
 import { createDirectories } from "./ldap.ts";
 import { createSaml } from "./saml.ts";
@@ -62,6 +63,8 @@ const auth = createAuth({
 });
 const oidc = createOidc({ db, keyring: createKeyring(kek), directory, auth, audit, issuer: publicUrl });
 const saml = await createSaml({ db, keyring: createKeyring(kek), directory, audit, issuer: publicUrl, signedIn: oidc.signedIn, missing: oidc.missing });
+const products = parseProducts(process.env.OPENASY_PRODUCTS);
+if (products.invalid.length) log("warn", "OPENASY_PRODUCTS: left out entries that are not id=https://address", { entries: products.invalid });
 const server = createServer(
   createApp({
     db,
@@ -76,6 +79,7 @@ const server = createServer(
     webDir: !headless && existsSync(webDir) ? webDir : undefined,
     docsDir: existsSync(docsDir) ? docsDir : undefined,
     openapi,
+    products: products.products,
   }),
 );
 

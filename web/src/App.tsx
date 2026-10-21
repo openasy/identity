@@ -1,7 +1,8 @@
-import { AppShell, BrandProvider, Button, Callout, EmptyState, PageHeader } from "@openasy/ui";
+import { AppShell, BrandProvider, Button, Callout, EmptyState, navigate, PageHeader, PRODUCT_IDS, usePath, type ProductId } from "@openasy/ui";
 import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAuth } from "@openasy/auth/react";
 import { AppWindow, ArrowRight, FolderTree, RefreshCw, KeyRound, LayoutDashboard, LogIn, LogOut, ScrollText, UserRound, Users, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { ProductLink } from "./api.ts";
 import { ApplicationsPage } from "./applications.tsx";
 import { DirectoriesPage } from "./directories.tsx";
 import { GroupsPage } from "./groups.tsx";
@@ -10,11 +11,11 @@ import { PeoplePage } from "./people.tsx";
 import { ProvisioningPage } from "./provisioning.tsx";
 import { useApi } from "./shared.tsx";
 
-const PAGES = ["overview", "applications", "people", "groups", "audit", "account", "members", "signin", "provisioning", "directories", "tokens"] as const;
+export const PAGES = ["overview", "applications", "people", "groups", "audit", "account", "members", "signin", "provisioning", "directories", "tokens"] as const;
 type Page = (typeof PAGES)[number];
 
-function parsePage(hash: string): Page {
-  const page = hash.replace(/^#\/?/, "").split("/")[0] ?? "";
+function parsePage(path: string): Page {
+  const page = path.split("/")[1] ?? "";
   return (PAGES as readonly string[]).includes(page) ? (page as Page) : "overview";
 }
 
@@ -50,8 +51,9 @@ keepReturn();
 function Product() {
   const { me, can, signOut } = useAuth();
   const call = useApi();
-  const [page, setPage] = useState<Page>(() => parsePage(window.location.hash));
+  const page = parsePage(usePath());
   const [returning] = useState(() => sessionStorage.getItem(RETURN));
+  const [products, setProducts] = useState<Array<ProductLink & { id: ProductId }>>([]);
   // What the application's groups ask for: a session with a second factor (or a passkey, or through an identity
   // provider), or one with a passkey.
   const asked = sessionStorage.getItem(MFA);
@@ -65,13 +67,18 @@ function Product() {
 
   useEffect(() => {
     if (returning && !waitForFactor) continueToApp();
-    const onHash = () => setPage(parsePage(window.location.hash));
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
   }, [returning, waitForFactor]);
+  // The install's other products (OPENASY_PRODUCTS), for the switcher; ids this UI does not know are left out.
+  const manages = can("viewer");
+  useEffect(() => {
+    if (!manages) return;
+    void call<{ products: ProductLink[] }>("/api/v1/products").then(
+      (r) => setProducts(r.products.filter((p): p is ProductLink & { id: ProductId } => p.id !== "identity" && (PRODUCT_IDS as readonly string[]).includes(p.id))),
+      () => {},
+    );
+  }, [call, manages]);
 
   if (returning && !waitForFactor) return null;
-  const manages = can("viewer");
   const shown: Page = waitForFactor || !manages ? "account" : page;
   const nav = manages
     ? [
@@ -97,7 +104,19 @@ function Product() {
   const roleName = me.user.role.charAt(0).toUpperCase() + me.user.role.slice(1);
 
   return (
-    <AppShell product="identity" nav={nav} activeNav={shown} onNavigate={(id) => (window.location.hash = `#/${id}`)} footerNav={footerNav} user={{ name: me.user.name, role: roleName }}>
+    <AppShell
+      product="identity"
+      nav={nav}
+      activeNav={shown}
+      onNavigate={(id) => navigate(`/${id}`)}
+      connectedProducts={products.map((p) => p.id)}
+      onSwitchProduct={(id) => {
+        const to = products.find((p) => p.id === id);
+        if (to) window.location.assign(to.url);
+      }}
+      footerNav={footerNav}
+      user={{ name: me.user.name, role: roleName }}
+    >
       {shown === "overview" ? (
         <OverviewPage call={call} />
       ) : shown === "audit" ? (

@@ -1,4 +1,4 @@
-import { Button, EmptyState, KpiCard, KpiGrid, PageHeader, Panel, SelectField, type Column } from "@openasy/ui";
+import { Button, EmptyState, KpiCard, KpiGrid, navigate, PageHeader, Panel, SelectField, type Column } from "@openasy/ui";
 import { useState } from "react";
 import type { AuditEvent, Overview } from "./api.ts";
 import { ago, List, useData, type Call } from "./shared.tsx";
@@ -44,7 +44,6 @@ const eventColumns: Column<AuditEvent>[] = [
 export function OverviewPage({ call }: { call: Call }) {
   const o = useData<Overview>(call, "/api/v1/overview", 30_000).data;
   const recent = useData<{ events: AuditEvent[] }>(call, "/api/v1/audit?type=app-sign-in&limit=10", 30_000).data?.events;
-  const go = (hash: string) => (window.location.hash = hash);
   return (
     <>
       <PageHeader title="Overview" description="Single sign-on for OpenAsy products and any other application, with MFA and passkeys." />
@@ -58,7 +57,7 @@ export function OverviewPage({ call }: { call: Call }) {
         <EmptyState
           title="Start with an application"
           action={
-            <Button variant="primary" onClick={() => go("#/applications")}>
+            <Button variant="primary" onClick={() => navigate("/applications")}>
               Add an application
             </Button>
           }
@@ -66,7 +65,7 @@ export function OverviewPage({ call }: { call: Call }) {
           Add an application, choose the groups that may use it, and people sign in to it with Identity.
         </EmptyState>
       ) : (
-        <Panel title="Latest sign-ins to applications" flush actions={<Button size="sm" variant="ghost" onClick={() => go("#/audit")}>Audit log</Button>}>
+        <Panel title="Latest sign-ins to applications" flush actions={<Button size="sm" variant="ghost" onClick={() => navigate("/audit")}>Audit log</Button>}>
           <List label="Latest sign-ins to applications" rows={recent} columns={eventColumns.filter((c) => c.id !== "detail")} empty="Nobody signed in to an application yet" getRowId={(e) => String(e.id)} />
         </Panel>
       )}

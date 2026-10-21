@@ -16,6 +16,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
+export type { ProductLink } from "../../server/products.ts";
+
 export interface Application {
   id: string;
   name: string;

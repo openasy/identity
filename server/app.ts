@@ -8,6 +8,7 @@ import type { Audit } from "./audit.ts";
 import type { Directory } from "./directory.ts";
 import { countRequest, renderMetrics } from "./metrics.ts";
 import type { Oidc } from "./oidc.ts";
+import type { ProductLink } from "./products.ts";
 import type { Directories } from "./ldap.ts";
 import type { Saml } from "./saml.ts";
 import type { Scim } from "./scim.ts";
@@ -29,6 +30,8 @@ export interface AppOptions {
   docsDir?: string;
   /** The OpenAPI description, served at /api/openapi.json with this release's version. */
   openapi?: Record<string, unknown>;
+  /** The install's OpenAsy products and their addresses, from OPENASY_PRODUCTS, for the product switcher. */
+  products?: ProductLink[];
 }
 
 const TYPES: Record<string, string> = {
@@ -133,7 +136,7 @@ interface Route {
   handle: (ctx: Ctx) => unknown;
 }
 
-export function createApp({ db, version, auth, directory, oidc, audit, scim, directories, saml, webDir, docsDir, openapi }: AppOptions) {
+export function createApp({ db, version, auth, directory, oidc, audit, scim, directories, saml, webDir, docsDir, openapi, products = [] }: AppOptions) {
   // The served description includes /api/v1/auth from @openasy/auth, so the API reference documents sign-in too.
   const spec = openapi && JSON.stringify({ ...mergeOpenApi(openapi), info: { ...(openapi.info as object), version } });
 
@@ -142,6 +145,7 @@ export function createApp({ db, version, auth, directory, oidc, audit, scim, dir
 
   const routes: Route[] = [
     { method: "GET", path: "/api/v1/version", auth: "none", handle: () => ({ product: "identity", version }) },
+    { method: "GET", path: "/api/v1/products", auth: "viewer", handle: () => ({ products }) },
 
     // Applications people sign in to (OpenID Connect clients). Admins change them: they decide who gets in.
     { method: "GET", path: "/api/v1/applications", auth: "viewer", handle: () => ({ applications: directory.listApplications(), issuer: oidc.provider.issuer }) },

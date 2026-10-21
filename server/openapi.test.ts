@@ -97,6 +97,8 @@ describe("responses match openapi.json", () => {
       headers: { origin: b.base, "user-agent": "Mozilla/5.0 (Macintosh) Chrome/141.0", cookie: [...b.cookies].map(([k, v]) => `${k}=${v}`).join("; "), "content-type": "application/json" },
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
+    await call("GET", "/api/v1/products", as(owner));
+    await call("GET", "/api/v1/products", {});
     await call("GET", "/api/v1/applications", {});
     const group = (await call("POST", "/api/v1/groups", as(owner, { name: "Engineering", description: "Builds things" }))).body as { id: string };
     await call("POST", "/api/v1/groups", as(owner, { name: "Engineering" }));
