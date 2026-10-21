@@ -25,7 +25,8 @@ const SETTINGS = {
   tokens: ["API tokens", "For scripts. Each token has one role and an expiry; the secret is shown once."],
 } as const;
 
-// An application sent someone here to sign in (/?return=/interaction/<uid>): once they are signed in, they go back.
+// An application sent someone here to sign in (/?return=/interaction/<uid>, or /saml/continue/<id> for SAML): once
+// they are signed in, they go back.
 // Only that path is taken, so the link cannot send anyone to another site. With &mfa=required their groups ask for a
 // second factor first.
 const RETURN = "openasy-identity-return";
@@ -34,7 +35,7 @@ function keepReturn() {
   const url = new URL(location.href);
   const to = url.searchParams.get("return");
   if (!to) return;
-  if (/^\/interaction\/[\w-]+$/.test(to)) {
+  if (/^\/interaction\/[\w-]+$/.test(to) || /^\/saml\/continue\/[\w-]+$/.test(to)) {
     sessionStorage.setItem(RETURN, to);
     const mfa = url.searchParams.get("mfa");
     if (mfa === "required" || mfa === "passkey") sessionStorage.setItem(MFA, mfa);

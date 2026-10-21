@@ -132,6 +132,9 @@ describe("responses match openapi.json", () => {
 
     const created = (await call("POST", "/api/v1/applications", as(owner, { name: "VPN", template: "openasy-vpn", url: "https://vpn.example.com", groups: ["Engineering"] }))).body as { application: { id: string } };
     await call("POST", "/api/v1/applications", as(owner, { name: "Bad", redirectUris: ["ftp://x"] }));
+    const jira = (await call("POST", "/api/v1/applications", as(owner, { name: "Jira", template: "saml", entityId: "https://jira.example.com/sp", acsUrl: "https://jira.example.com/acs" }))).body as { application: { id: string } };
+    await call("POST", "/api/v1/applications", as(owner, { name: "Jira again", template: "saml", entityId: "https://jira.example.com/sp", acsUrl: "https://jira.example.com/acs" }));
+    await call("PATCH", "/api/v1/applications/{id}", as(owner, { nameId: "persistent" }), `/api/v1/applications/${jira.application.id}`);
     await call("GET", "/api/v1/applications", as(owner));
     await call("GET", "/api/v1/applications/{id}", as(owner), `/api/v1/applications/${created.application.id}`);
     await call("GET", "/api/v1/applications/{id}", as(owner), "/api/v1/applications/missing");

@@ -10,6 +10,7 @@ import { createDirectory } from "./directory.ts";
 import { createKeyring } from "./kek.ts";
 import { createOidc } from "./oidc.ts";
 import { createDirectories } from "./ldap.ts";
+import { createSaml } from "./saml.ts";
 import { createScim } from "./scim.ts";
 
 export const KEK = Buffer.alloc(32, 7);
@@ -28,9 +29,10 @@ export async function startApp(opts: Partial<AppOptions> & { version: string }) 
   const auth = createAuth({ db, product: "identity", productName: "OpenAsy Identity", origin: base, secretsKey: KEK, users: true, externalPasswords: { managedBy: directories.managedBy, verify: directories.verify }, onEvent: (e) => audit.record(e), onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups) });
   const oidc = createOidc({ db, keyring, directory, auth, audit, issuer: base });
   const scim = createScim({ db, audit, base });
-  handler = createApp({ db, auth, directory, oidc, audit, scim, directories, ...opts });
+  const saml = await createSaml({ db, keyring, directory, audit, issuer: base, signedIn: oidc.signedIn, missing: oidc.missing });
+  handler = createApp({ db, auth, directory, oidc, audit, scim, directories, saml, ...opts });
   const close = () => new Promise<void>((resolve) => server.close(() => resolve()));
-  return { db, auth, directory, oidc, audit, scim, directories, base, close };
+  return { db, auth, directory, oidc, audit, scim, directories, saml, base, close };
 }
 
 export const UA = "Mozilla/5.0 (Macintosh) Chrome/141.0";

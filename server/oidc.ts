@@ -250,6 +250,10 @@ export function createOidc({ db, keyring, directory, auth, audit, issuer }: Oidc
 
   return {
     provider,
+    /** Who is signed in to Identity here; SAML asks the same (saml.ts). */
+    signedIn,
+    /** What someone's groups still ask of this session. */
+    missing,
     /** Answers the provider's paths and returns true; false for everything else. */
     async handle(req: IncomingMessage, res: ServerResponse, path: string): Promise<boolean> {
       const m = path.match(/^\/interaction\/([A-Za-z0-9_-]+)$/);

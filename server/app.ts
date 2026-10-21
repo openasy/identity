@@ -9,6 +9,7 @@ import type { Directory } from "./directory.ts";
 import { countRequest, renderMetrics } from "./metrics.ts";
 import type { Oidc } from "./oidc.ts";
 import type { Directories } from "./ldap.ts";
+import type { Saml } from "./saml.ts";
 import type { Scim } from "./scim.ts";
 
 export interface AppOptions {
@@ -21,6 +22,7 @@ export interface AppOptions {
   audit: Audit;
   scim: Scim;
   directories: Directories;
+  saml: Saml;
   /** Built web UI; omit to run headless (ADR 0018). */
   webDir?: string;
   /** Built API reference (Swagger UI), served at /api/docs. */
@@ -131,7 +133,7 @@ interface Route {
   handle: (ctx: Ctx) => unknown;
 }
 
-export function createApp({ db, version, auth, directory, oidc, audit, scim, directories, webDir, docsDir, openapi }: AppOptions) {
+export function createApp({ db, version, auth, directory, oidc, audit, scim, directories, saml, webDir, docsDir, openapi }: AppOptions) {
   // The served description includes /api/v1/auth from @openasy/auth, so the API reference documents sign-in too.
   const spec = openapi && JSON.stringify({ ...mergeOpenApi(openapi), info: { ...(openapi.info as object), version } });
 
@@ -367,6 +369,8 @@ export function createApp({ db, version, auth, directory, oidc, audit, scim, dir
     if (await oidc.handle(req, res, path)) return path.startsWith("/interaction/") ? "/interaction/:uid" : "/oidc";
 
     if (await scim.handle(req, res, path)) return "/scim/v2";
+
+    if (await saml.handle(req, res, path)) return "/saml";
 
     if (await auth.handle(req, res)) return auth.routeName(req) ?? "/api/v1/auth/*";
 

@@ -111,6 +111,20 @@ const MIGRATIONS = [
      seen_at TEXT NOT NULL
    );
    CREATE INDEX directory_users_directory ON directory_users (directory_id);`,
+  // 0.1.0: SAML 2.0 applications (ADR 0034). Identity answers at the ACS address registered here, never at the one a
+  // request names; a request waits here while its person signs in.
+  `ALTER TABLE applications ADD COLUMN protocol TEXT NOT NULL DEFAULT 'oidc' CHECK (protocol IN ('oidc', 'saml'));
+   ALTER TABLE applications ADD COLUMN saml_entity_id TEXT;
+   ALTER TABLE applications ADD COLUMN saml_acs_url TEXT;
+   ALTER TABLE applications ADD COLUMN saml_name_id TEXT CHECK (saml_name_id IN ('email', 'persistent'));
+   CREATE UNIQUE INDEX applications_saml_entity ON applications (saml_entity_id) WHERE saml_entity_id IS NOT NULL;
+   CREATE TABLE saml_requests (
+     id TEXT PRIMARY KEY,
+     application_id TEXT NOT NULL REFERENCES applications (id) ON DELETE CASCADE,
+     request_id TEXT,
+     relay_state TEXT,
+     expires_at TEXT NOT NULL
+   );`,
 ];
 
 /** Opens the product's single SQLite file in WAL mode (ADR 0011) and migrates it forward. */

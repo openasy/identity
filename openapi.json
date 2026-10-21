@@ -4,7 +4,7 @@
     "title": "OpenAsy Identity API",
     "version": "0.1.0",
     "summary": "Single sign-on for OpenAsy products and any other application.",
-    "description": "Every screen of Identity uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nThe OpenID provider is at `/.well-known/openid-configuration` and `/oidc/*` (ADR 0033); applications sign people in there. Identity providers provision people and groups with SCIM 2.0 at `/scim/v2`, with the token from `/api/v1/provisioning`. The operations below take the session of a signed-in person or an API token, and each names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003).\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
+    "description": "Every screen of Identity uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nThe OpenID provider is at `/.well-known/openid-configuration` and `/oidc/*` (ADR 0033); applications sign people in there. SAML 2.0 applications use `/saml/metadata` and `/saml/sso`. Identity providers provision people and groups with SCIM 2.0 at `/scim/v2`, with the token from `/api/v1/provisioning`. The operations below take the session of a signed-in person or an API token, and each names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003).\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
     "license": {
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
@@ -135,6 +135,9 @@
           "403": {
             "$ref": "#/components/responses/Problem"
           },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
           "422": {
             "$ref": "#/components/responses/Problem"
           },
@@ -255,6 +258,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
             "$ref": "#/components/responses/Problem"
           },
           "422": {
@@ -1433,7 +1439,9 @@
           "postLogoutRedirectUris",
           "everyone",
           "groups",
-          "createdAt"
+          "createdAt",
+          "protocol",
+          "saml"
         ],
         "properties": {
           "id": {
@@ -1449,7 +1457,9 @@
               "openasy-vpn",
               "openasy-infrastructure",
               "openasy-vulnerabilities",
-              "oidc"
+              "oidc",
+              "aws",
+              "saml"
             ]
           },
           "redirectUris": {
@@ -1479,6 +1489,42 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "oidc",
+              "saml"
+            ]
+          },
+          "saml": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "required": [
+              "entityId",
+              "acsUrl",
+              "nameId"
+            ],
+            "properties": {
+              "entityId": {
+                "type": "string"
+              },
+              "acsUrl": {
+                "type": "string",
+                "format": "uri",
+                "description": "Identity answers only here, whatever a request names."
+              },
+              "nameId": {
+                "type": "string",
+                "enum": [
+                  "email",
+                  "persistent"
+                ]
+              }
+            },
+            "description": "For SAML applications."
           }
         }
       },
@@ -1512,8 +1558,11 @@
             "$ref": "#/components/schemas/Application"
           },
           "clientSecret": {
-            "type": "string",
-            "description": "Shown once; Identity keeps it sealed."
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Shown once; Identity keeps it sealed. null for a SAML application, which trusts Identity's signing certificate."
           }
         }
       },
@@ -1532,9 +1581,12 @@
               "openasy-vpn",
               "openasy-infrastructure",
               "openasy-vulnerabilities",
-              "oidc"
+              "oidc",
+              "aws",
+              "saml"
             ],
-            "default": "oidc"
+            "default": "oidc",
+            "description": "aws and saml are SAML 2.0 applications; the others OpenID Connect."
           },
           "url": {
             "type": "string",
@@ -1561,6 +1613,22 @@
             "items": {
               "type": "string"
             }
+          },
+          "entityId": {
+            "type": "string",
+            "description": "For SAML: the application's entity ID (its audience)."
+          },
+          "acsUrl": {
+            "type": "string",
+            "description": "For SAML: where the application receives responses, https."
+          },
+          "nameId": {
+            "type": "string",
+            "enum": [
+              "email",
+              "persistent"
+            ],
+            "description": "For SAML: email (default) or Identity's stable id."
           }
         }
       },
@@ -1595,6 +1663,22 @@
             "items": {
               "type": "string"
             }
+          },
+          "entityId": {
+            "type": "string",
+            "description": "For SAML: the application's entity ID (its audience)."
+          },
+          "acsUrl": {
+            "type": "string",
+            "description": "For SAML: where the application receives responses, https."
+          },
+          "nameId": {
+            "type": "string",
+            "enum": [
+              "email",
+              "persistent"
+            ],
+            "description": "For SAML: email (default) or Identity's stable id."
           }
         }
       },

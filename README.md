@@ -1,11 +1,9 @@
 # identity
 
-The [OpenAsy](https://github.com/openasy) Identity product: single sign-on with OpenID Connect, MFA and passkeys, for
-OpenAsy products and any other application. One container with its API and web UI, one version, its data in one
-SQLite file (ADR 0018, 0033).
-
-> **Not released yet.** See [ADR 0033](https://github.com/openasy/openasy.github.io/blob/main/docs/decisions/0033-identity.md)
-> for what comes later: SAML 2.0, LDAP and Active Directory, SCIM, and passkey-only groups.
+The [OpenAsy](https://github.com/openasy) Identity product: single sign-on with OpenID Connect and SAML 2.0, MFA and
+passkeys, for OpenAsy products and any other application. One container with its API and web UI, one version, its data
+in one SQLite file (ADR 0018, [0033](https://github.com/openasy/openasy.github.io/blob/main/docs/decisions/0033-identity.md),
+[0034](https://github.com/openasy/openasy.github.io/blob/main/docs/decisions/0034-identity-directories-and-saml.md)).
 
 - **OpenID provider** on [oidc-provider](https://github.com/panva/node-oidc-provider), OpenID Certified: discovery,
   authorization code with PKCE for every application, refresh tokens, userinfo and RP-initiated logout. The ID token
@@ -16,8 +14,17 @@ SQLite file (ADR 0018, 0033).
 - **Applications:** OpenAsy VPN, Infrastructure and Vulnerabilities from a template that fills in their callback
   addresses and shows what to enter there, or any OpenID Connect application by its redirect URIs. Each is open to
   everyone or to chosen groups; the client secret is shown once.
+- **SAML 2.0 applications** such as AWS IAM Identity Center, Jira or GitLab: Identity answers only at the ACS address
+  registered for the application, signs the response and the assertion with RSA-SHA256, and sends `email`, `name` and
+  `groups`. Its metadata is at `/saml/metadata`; the signing key is made on first start and sealed with `openasy-kek`.
 - **A second factor per group:** where a group requires one, its members sign in to applications with an
-  authenticator app, a passkey or an identity provider. People without one are asked to add it and then continue.
+  authenticator app, a passkey or an identity provider. A group can also accept only a passkey. People without one are
+  asked to add it and then continue.
+- **LDAP and Active Directory:** read on a schedule under Settings, Directories. People found get the User role,
+  people gone or disabled there are turned off, and groups that match a filter follow it. They sign in with the
+  directory's password, checked by binding as them; it never reaches Identity's database.
+- **SCIM 2.0:** Okta and Microsoft Entra ID create, change and remove people and groups at `/scim/v2`, with a token
+  made under Settings, Provisioning. Turning someone off ends their sessions.
 - **Audit log:** sign-ins to Identity and to applications, refusals, and every change with who made it, kept 400 days
   on the Audit page and written to the JSON log as it happens.
 - **People and groups:** invite people to sign in to applications only (the User role), and group them by hand or let
@@ -64,6 +71,9 @@ product's roles there, for example `Engineering = admin`.
 **Any other application:** choose Another application, give its redirect URIs, and set it up with the issuer, client
 ID and secret. It must send PKCE (S256); ask for the scopes `openid email profile groups`.
 
+**A SAML application:** choose AWS IAM Identity Center or Another application (SAML 2.0), give its entity ID and ACS
+URL, and give it Identity's metadata address, `IDENTITY_PUBLIC_URL/saml/metadata`.
+
 **People from Keycloak, Entra ID, Okta or Google:** under Sign-in, an owner adds the provider and chooses Join as
 User for people nobody invited; they join the directory at their first sign-in. A group whose members come from
 `keycloak:ops-admins` follows that group.
@@ -76,6 +86,8 @@ User for people nobody invited; they join the directory at their first sign-in. 
 | `/metrics` | Prometheus metrics |
 | `GET /api/v1/version` | Product and version |
 | `/.well-known/openid-configuration`, `/oidc/*` | The OpenID provider: the issuer is `IDENTITY_PUBLIC_URL` |
+| `/saml/metadata`, `/saml/sso`, `/saml/certificate` | The SAML identity provider: the entity ID is `IDENTITY_PUBLIC_URL/saml` |
+| `/scim/v2` | SCIM 2.0 Users and Groups, with the provisioning token |
 | `/api/v1/applications`, `/api/v1/groups`, `/api/v1/people` | Applications, groups and the directory |
 | `/api/v1/audit`, `/api/v1/overview` | The audit log, and the counts on the overview |
 | `/api/docs/` | Interactive API reference (Swagger UI), bundled in the image |

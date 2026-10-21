@@ -39,7 +39,11 @@
   },
   "dependencies": {
     "@openasy/auth": "https://github.com/openasy/auth/releases/download/v0.3.0/openasy-auth-0.3.0.tgz",
+    "@peculiar/x509": "^2.2.0",
+    "@xmldom/xmldom": "^0.9.12",
     "ldapts": "^9.2.0",
-    "oidc-provider": "^9.12.2"
+    "oidc-provider": "^9.12.2",
+    "reflect-metadata": "^0.2.2",
+    "samlify": "^2.15.1"
   }
 }

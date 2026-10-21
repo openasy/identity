@@ -9,6 +9,7 @@ import { createKeyring } from "./kek.ts";
 import { log } from "./log.ts";
 import { createOidc } from "./oidc.ts";
 import { createDirectories } from "./ldap.ts";
+import { createSaml } from "./saml.ts";
 import { createScim } from "./scim.ts";
 
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
@@ -60,6 +61,7 @@ const auth = createAuth({
   onEvent: (event) => audit.record(event),
 });
 const oidc = createOidc({ db, keyring: createKeyring(kek), directory, auth, audit, issuer: publicUrl });
+const saml = await createSaml({ db, keyring: createKeyring(kek), directory, audit, issuer: publicUrl, signedIn: oidc.signedIn, missing: oidc.missing });
 const server = createServer(
   createApp({
     db,
@@ -70,6 +72,7 @@ const server = createServer(
     audit,
     scim: createScim({ db, audit, base: publicUrl }),
     directories,
+    saml,
     webDir: !headless && existsSync(webDir) ? webDir : undefined,
     docsDir: existsSync(docsDir) ? docsDir : undefined,
     openapi,
@@ -83,7 +86,7 @@ if (!publicUrl.startsWith("https://") && !/^http:\/\/(localhost|127\.0\.0\.1)(:|
 const setup = auth.setupLink();
 // No default password (ADR 0013): the first person to open this link becomes the owner.
 if (setup) log("info", "no owner yet: open this link once to create the owner account", { url: setup });
-const purge = setInterval(() => (auth.purge(), oidc.purge(), audit.purge()), 5 * 60_000);
+const purge = setInterval(() => (auth.purge(), oidc.purge(), audit.purge(), saml.purge()), 5 * 60_000);
 // Directories are read when their interval has passed; one at a time, never two reads of the same one.
 let syncing = false;
 const sync = setInterval(() => {

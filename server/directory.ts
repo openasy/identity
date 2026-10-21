@@ -24,6 +24,9 @@ export interface Application {
   id: string;
   name: string;
   template: string;
+  protocol: "oidc" | "saml";
+  /** For SAML applications: who they are, where Identity answers, and how a person is named to them. */
+  saml: { entityId: string; acsUrl: string; nameId: "email" | "persistent" } | null;
   redirectUris: string[];
   postLogoutRedirectUris: string[];
   everyone: boolean;
@@ -45,7 +48,9 @@ export interface Person {
 }
 
 /** Applications that start from a template: OpenAsy products fill in their callback address. */
-export const TEMPLATES = ["openasy-vpn", "openasy-infrastructure", "openasy-vulnerabilities", "oidc"] as const;
+export const TEMPLATES = ["openasy-vpn", "openasy-infrastructure", "openasy-vulnerabilities", "oidc", "aws", "saml"] as const;
+/** Templates for applications that sign people in with SAML 2.0 rather than OpenID Connect. */
+const SAML_TEMPLATES = new Set<string>(["aws", "saml"]);
 export type Template = (typeof TEMPLATES)[number];
 
 /**
@@ -54,7 +59,20 @@ export type Template = (typeof TEMPLATES)[number];
  */
 export const productCallbacks = (url: string) => ["openasy-identity", "sso"].map((id) => `${url.replace(/\/$/, "")}/api/v1/auth/oidc/${id}/callback`);
 
-type AppRow = { id: string; name: string; template: string; client_secret: string; redirect_uris: string; post_logout_redirect_uris: string; everyone: number; created_at: string };
+type AppRow = {
+  id: string;
+  name: string;
+  template: string;
+  client_secret: string;
+  redirect_uris: string;
+  post_logout_redirect_uris: string;
+  everyone: number;
+  created_at: string;
+  protocol: "oidc" | "saml";
+  saml_entity_id: string | null;
+  saml_acs_url: string | null;
+  saml_name_id: "email" | "persistent" | null;
+};
 
 export function createDirectory(db: DatabaseSync, keyring: Keyring) {
   // ---- groups ---------------------------------------------------------------------------------------------------
@@ -194,6 +212,8 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     id: r.id,
     name: r.name,
     template: r.template,
+    protocol: r.protocol,
+    saml: r.protocol === "saml" ? { entityId: r.saml_entity_id!, acsUrl: r.saml_acs_url!, nameId: r.saml_name_id ?? "email" } : null,
     redirectUris: JSON.parse(r.redirect_uris) as string[],
     postLogoutRedirectUris: JSON.parse(r.post_logout_redirect_uris) as string[],
     everyone: r.everyone === 1,
@@ -243,19 +263,32 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     return uris(productCallbacks(url), "url");
   }
 
-  /** A new application and its client secret, shown once. */
+  /** What a SAML application says about itself: its entity ID, where it receives answers, and its name format. */
+  function samlSettings(b: Record<string, unknown>, current?: Application["saml"]) {
+    const entityId = b.entityId === undefined && current ? current.entityId : text(b.entityId, "entityId", 512)!;
+    const acsUrl = b.acsUrl === undefined && current ? current.acsUrl : uris([text(b.acsUrl, "acsUrl", 1024)], "acsUrl")[0]!;
+    const nameId = b.nameId === undefined ? (current?.nameId ?? "email") : b.nameId;
+    if (nameId !== "email" && nameId !== "persistent") throw invalid('nameId is "email" or "persistent".');
+    return { entityId, acsUrl, nameId: nameId as "email" | "persistent" };
+  }
+
+  /** A new application and its client secret, shown once; a SAML application has none. */
   function createApplication(b: Record<string, unknown>) {
     const template = (b.template ?? "oidc") as Template;
     if (!TEMPLATES.includes(template)) throw invalid(`template must be one of ${TEMPLATES.join(", ")}.`);
     const name = text(b.name, "name", 100)!;
-    const redirectUris = redirects(template, b);
+    const saml = SAML_TEMPLATES.has(template) ? samlSettings(b) : null;
+    if (saml && db.prepare("SELECT 1 FROM applications WHERE saml_entity_id = ?").get(saml.entityId)) throw new HttpProblem(409, "conflict", `An application with the entity ID ${saml.entityId} exists.`);
+    const redirectUris = saml ? [] : redirects(template, b);
     const post = b.postLogoutRedirectUris === undefined ? [] : uris(b.postLogoutRedirectUris, "postLogoutRedirectUris");
     if (b.everyone !== undefined && typeof b.everyone !== "boolean") throw invalid("everyone must be true or false.");
     const id = `oa-${randomBytes(9).toString("base64url").toLowerCase().replace(/[^a-z0-9]/g, "x")}`;
     const secret = `ois_${randomBytes(32).toString("base64url")}`;
     db.exec("BEGIN");
     try {
-      db.prepare("INSERT INTO applications (id, name, template, client_secret, redirect_uris, post_logout_redirect_uris, everyone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+      db.prepare(
+        "INSERT INTO applications (id, name, template, client_secret, redirect_uris, post_logout_redirect_uris, everyone, created_at, protocol, saml_entity_id, saml_acs_url, saml_name_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(
         id,
         name,
         template,
@@ -264,6 +297,10 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
         JSON.stringify(post),
         b.everyone === true ? 1 : 0,
         now(),
+        saml ? "saml" : "oidc",
+        saml?.entityId ?? null,
+        saml?.acsUrl ?? null,
+        saml?.nameId ?? null,
       );
       setAppGroups(id, b.groups ?? []);
       db.exec("COMMIT");
@@ -271,19 +308,30 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
       db.exec("ROLLBACK");
       throw err;
     }
-    return { application: application(id), clientSecret: secret };
+    return { application: application(id), clientSecret: saml ? null : secret };
   }
 
   function updateApplication(id: string, b: Record<string, unknown>): Application {
     const current = application(id);
     const name = text(b.name, "name", 100, true) ?? current.name;
-    const redirectUris = b.redirectUris === undefined && b.url === undefined ? current.redirectUris : redirects(current.template as Template, b);
+    const redirectUris = current.saml || (b.redirectUris === undefined && b.url === undefined) ? current.redirectUris : redirects(current.template as Template, b);
+    const saml = current.saml && samlSettings(b, current.saml);
+    if (saml && db.prepare("SELECT 1 FROM applications WHERE saml_entity_id = ? AND id != ?").get(saml.entityId, id)) throw new HttpProblem(409, "conflict", `An application with the entity ID ${saml.entityId} exists.`);
     const post = b.postLogoutRedirectUris === undefined ? current.postLogoutRedirectUris : uris(b.postLogoutRedirectUris, "postLogoutRedirectUris");
     if (b.everyone !== undefined && typeof b.everyone !== "boolean") throw invalid("everyone must be true or false.");
     const everyone = b.everyone === undefined ? current.everyone : b.everyone;
     db.exec("BEGIN");
     try {
-      db.prepare("UPDATE applications SET name = ?, redirect_uris = ?, post_logout_redirect_uris = ?, everyone = ? WHERE id = ?").run(name, JSON.stringify(redirectUris), JSON.stringify(post), everyone ? 1 : 0, id);
+      db.prepare("UPDATE applications SET name = ?, redirect_uris = ?, post_logout_redirect_uris = ?, everyone = ?, saml_entity_id = ?, saml_acs_url = ?, saml_name_id = ? WHERE id = ?").run(
+        name,
+        JSON.stringify(redirectUris),
+        JSON.stringify(post),
+        everyone ? 1 : 0,
+        saml?.entityId ?? null,
+        saml?.acsUrl ?? null,
+        saml?.nameId ?? null,
+        id,
+      );
       if (b.groups !== undefined) setAppGroups(id, b.groups);
       db.exec("COMMIT");
     } catch (err) {
@@ -295,7 +343,7 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
 
   /** A new client secret; the old one stops working at once. */
   function newSecret(id: string) {
-    application(id);
+    if (application(id).saml) throw new HttpProblem(409, "conflict", "A SAML application has no client secret: it trusts Identity's signing certificate.");
     const secret = `ois_${randomBytes(32).toString("base64url")}`;
     db.prepare("UPDATE applications SET client_secret = ? WHERE id = ?").run(keyring.seal(secret), id);
     return { application: application(id), clientSecret: secret };
@@ -308,7 +356,8 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
   /** The client metadata oidc-provider needs, with the secret in the clear. */
   function clientMetadata(id: string) {
     const r = appRow(id);
-    if (!r) return undefined;
+    // SAML applications are not OpenID clients.
+    if (!r || r.protocol !== "oidc") return undefined;
     return {
       client_id: r.id,
       client_name: r.name,
@@ -347,6 +396,7 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     newSecret,
     deleteApplication,
     clientMetadata,
+    samlApplication: (entityId: string) => (db.prepare("SELECT id FROM applications WHERE saml_entity_id = ?").get(entityId) as { id: string } | undefined)?.id,
     mayUse,
   };
 }

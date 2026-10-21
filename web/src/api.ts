@@ -19,7 +19,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 export interface Application {
   id: string;
   name: string;
-  template: "openasy-vpn" | "openasy-infrastructure" | "openasy-vulnerabilities" | "oidc";
+  template: "openasy-vpn" | "openasy-infrastructure" | "openasy-vulnerabilities" | "oidc" | "aws" | "saml";
+  protocol: "oidc" | "saml";
+  saml: { entityId: string; acsUrl: string; nameId: "email" | "persistent" } | null;
   redirectUris: string[];
   postLogoutRedirectUris: string[];
   everyone: boolean;
@@ -30,7 +32,8 @@ export interface Application {
 /** A new application, or a new secret: the secret is shown once. */
 export interface ApplicationSecret {
   application: Application;
-  clientSecret: string;
+  /** null for a SAML application, which trusts Identity's signing certificate. */
+  clientSecret: string | null;
 }
 
 export interface Group {

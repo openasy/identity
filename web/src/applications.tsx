@@ -5,17 +5,49 @@ import { useState, type FormEvent } from "react";
 import type { Application, ApplicationSecret, Group } from "./api.ts";
 import { Code, List, Problem, useAction, useData, type Call } from "./shared.tsx";
 
-const TEMPLATES: Record<Application["template"], { label: string; product?: string; prefix?: string }> = {
+const TEMPLATES: Record<Application["template"], { label: string; product?: string; prefix?: string; saml?: true }> = {
   "openasy-vpn": { label: "OpenAsy VPN", product: "VPN", prefix: "VPN_" },
   "openasy-infrastructure": { label: "OpenAsy Infrastructure", product: "Infrastructure", prefix: "INFRA_" },
   "openasy-vulnerabilities": { label: "OpenAsy Vulnerabilities", product: "Vulnerabilities", prefix: "VULNS_" },
   oidc: { label: "Another application (OpenID Connect)" },
+  aws: { label: "AWS IAM Identity Center (SAML)", saml: true },
+  saml: { label: "Another application (SAML 2.0)", saml: true },
 };
+
+/** What a SAML application is set up with: Identity's metadata, or its parts. */
+function SamlDetails({ issuer, aws }: { issuer: string; aws: boolean }) {
+  return (
+    <>
+      <Code label="Identity for SAML">{`Metadata       ${issuer}/saml/metadata\nEntity ID      ${issuer}/saml\nSign-in URL    ${issuer}/saml/sso\nCertificate    ${issuer}/saml/certificate`}</Code>
+      <span>
+        {aws
+          ? "In IAM Identity Center, open Settings, Identity source, and change it to an external identity provider. Upload Identity's metadata, downloaded from the address above; AWS shows its ACS URL and issuer, which you entered here. Name people in AWS by their email."
+          : "Give the application Identity's metadata address, or the entity ID, sign-in URL and certificate. Identity signs the response and the assertion with RSA-SHA256, and sends the attributes email, name and groups."}
+      </span>
+    </>
+  );
+}
 
 /** The secret, once, and for an OpenAsy product what to enter there: in Settings, Sign-in, or its environment. */
 function Created({ created, issuer, onDone }: { created: ApplicationSecret; issuer: string; onDone: () => void }) {
   const { application: a, clientSecret } = created;
   const t = TEMPLATES[a.template];
+  if (!clientSecret)
+    return (
+      <Callout
+        tone="info"
+        title={`Set up ${a.name} with Identity`}
+        action={
+          <Button size="sm" onClick={onDone}>
+            Done
+          </Button>
+        }
+      >
+        <span className="flex flex-col gap-2">
+          <SamlDetails issuer={issuer} aws={a.template === "aws"} />
+        </span>
+      </Callout>
+    );
   return (
     <Callout
       tone="warning"
@@ -49,10 +81,14 @@ function AddApplication({ call, groups, onCreated }: { call: Call; groups: Group
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [redirects, setRedirects] = useState("");
+  const [entityId, setEntityId] = useState("");
+  const [acsUrl, setAcsUrl] = useState("");
+  const [nameId, setNameId] = useState<"email" | "persistent">("email");
   const [everyone, setEveryone] = useState(false);
   const [chosen, setChosen] = useState<string[]>([]);
   const action = useAction();
-  const product = template !== "oidc";
+  const saml = !!TEMPLATES[template].saml;
+  const product = !!TEMPLATES[template].product;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     await action.run(async () => {
@@ -61,12 +97,14 @@ function AddApplication({ call, groups, onCreated }: { call: Call; groups: Group
         template,
         everyone,
         groups: chosen,
-        ...(product ? { url: url.trim() } : { redirectUris: redirects.split(/[\s,]+/).filter(Boolean) }),
+        ...(saml ? { entityId: entityId.trim(), acsUrl: acsUrl.trim(), nameId } : product ? { url: url.trim() } : { redirectUris: redirects.split(/[\s,]+/).filter(Boolean) }),
       };
       onCreated(await call<ApplicationSecret>("/api/v1/applications", { method: "POST", body: JSON.stringify(body) }));
       setName("");
       setUrl("");
       setRedirects("");
+      setEntityId("");
+      setAcsUrl("");
       setChosen([]);
       setEveryone(false);
     });
@@ -77,7 +115,35 @@ function AddApplication({ call, groups, onCreated }: { call: Call; groups: Group
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))" }}>
           <SelectField label="Application" value={template} onChange={(e) => setTemplate(e.target.value as Application["template"])} options={Object.entries(TEMPLATES).map(([value, t]) => ({ value, label: t.label }))} />
           <TextField label="Name" placeholder={TEMPLATES[template].label} value={name} onChange={(e) => setName(e.target.value)} />
-          {product ? (
+          {saml ? (
+            <>
+              <TextField
+                label={template === "aws" ? "IAM Identity Center issuer URL" : "Entity ID"}
+                mono
+                placeholder={template === "aws" ? "https://us-east-1.signin.aws.amazon.com/platform/saml/d-1234567890" : "https://jira.example.com"}
+                hint="Who the application is: the audience of Identity's answers."
+                value={entityId}
+                onChange={(e) => setEntityId(e.target.value)}
+              />
+              <TextField
+                label="ACS URL"
+                mono
+                placeholder={template === "aws" ? "https://us-east-1.signin.aws.amazon.com/platform/saml/acs/..." : "https://jira.example.com/plugins/servlet/samlconsumer"}
+                hint="Where it receives answers. Identity answers only here."
+                value={acsUrl}
+                onChange={(e) => setAcsUrl(e.target.value)}
+              />
+              <SelectField
+                label="Name people by"
+                value={nameId}
+                onChange={(e) => setNameId(e.target.value as "email" | "persistent")}
+                options={[
+                  { value: "email", label: "Email address" },
+                  { value: "persistent", label: "A stable id that never changes" },
+                ]}
+              />
+            </>
+          ) : product ? (
             <TextField label="Address people open it at" mono placeholder="https://vpn.example.com" hint="Its callback addresses are filled in." value={url} onChange={(e) => setUrl(e.target.value)} />
           ) : (
             <TextField label="Redirect URIs" mono placeholder="https://grafana.example.com/login/generic_oauth" hint="https, or http on localhost; several separated by spaces." value={redirects} onChange={(e) => setRedirects(e.target.value)} />
@@ -97,7 +163,7 @@ function AddApplication({ call, groups, onCreated }: { call: Call; groups: Group
         </fieldset>
         <Problem error={action.error} title="Not added" />
         <span>
-          <Button type="submit" variant="primary" icon={<Plus />} loading={action.busy} disabled={product ? !url.trim() : !redirects.trim()}>
+          <Button type="submit" variant="primary" icon={<Plus />} loading={action.busy} disabled={saml ? !entityId.trim() || !acsUrl.trim() : product ? !url.trim() : !redirects.trim()}>
             Add application
           </Button>
         </span>
@@ -117,7 +183,7 @@ export function ApplicationsPage({ call }: { call: Call }) {
   const columns: Column<Application>[] = [
     { id: "name", header: "Application", cell: (a) => a.name, sortValue: (a) => a.name },
     { id: "kind", header: "Kind", width: "190px", cell: (a) => TEMPLATES[a.template].label },
-    { id: "client", header: "Client ID", mono: true, width: "190px", cell: (a) => a.id },
+    { id: "client", header: "Client ID or entity ID", mono: true, width: "240px", cell: (a) => a.saml?.entityId ?? a.id },
     { id: "who", header: "Who may sign in", cell: (a) => (a.everyone ? <Badge tone="info">Everyone</Badge> : a.groups.length ? a.groups.join(", ") : <Badge tone="warning">Nobody yet</Badge>) },
     ...(can("admin")
       ? [
@@ -127,14 +193,16 @@ export function ApplicationsPage({ call }: { call: Call }) {
             width: "220px",
             cell: (a: Application) => (
               <span className="flex gap-1 whitespace-nowrap">
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  icon={<KeyRound />}
-                  onClick={() => confirm(`Make a new secret for ${a.name}? The old one stops working at once.`) && void action.run(async () => setCreated(await call<ApplicationSecret>(`/api/v1/applications/${a.id}/secret`, { method: "POST" })))}
-                >
-                  New secret
-                </Button>
+                {!a.saml && (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    icon={<KeyRound />}
+                    onClick={() => confirm(`Make a new secret for ${a.name}? The old one stops working at once.`) && void action.run(async () => setCreated(await call<ApplicationSecret>(`/api/v1/applications/${a.id}/secret`, { method: "POST" })))}
+                  >
+                    New secret
+                  </Button>
+                )}
                 <Button size="xs" variant="ghost" icon={<Trash2 />} onClick={() => confirm(`Remove ${a.name}? Nobody can sign in to it with Identity any more.`) && void action.run(() => call(`/api/v1/applications/${a.id}`, { method: "DELETE" }).then(reload))}>
                   Remove
                 </Button>
