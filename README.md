@@ -4,9 +4,20 @@ The [OpenAsy](https://github.com/openasy) Identity product: single sign-on with 
 OpenAsy products and any other application. One container with its API and web UI, one version, its data in one
 SQLite file (ADR 0018, 0033).
 
-> **Not released yet.** This is the skeleton the first release grows from: sign-in for the people who manage Identity,
-> health, metrics and the API reference. The OpenID provider, applications, users, groups, MFA policies and upstream
-> providers come next; see [ADR 0033](https://github.com/openasy/openasy.github.io/blob/main/docs/decisions/0033-identity.md).
+> **Not released yet.** MFA policies per group, the audit page and the overview come before the first release; see
+> [ADR 0033](https://github.com/openasy/openasy.github.io/blob/main/docs/decisions/0033-identity.md).
+
+- **OpenID provider** on [oidc-provider](https://github.com/panva/node-oidc-provider), OpenID Certified: discovery,
+  authorization code with PKCE for every application, refresh tokens, userinfo and RP-initiated logout. The ID token
+  carries `email`, `name` and `groups` for the scopes asked for. Signing keys are sealed with `openasy-kek`.
+- **One sign-in:** people sign in to Identity with a password and a second factor, a passkey, or an identity provider
+  such as Keycloak or Microsoft Entra ID, and applications ask nothing more. Signing out of Identity signs them out of
+  the next application request too.
+- **Applications:** OpenAsy VPN, Infrastructure and Vulnerabilities from a template that fills in their callback
+  addresses and shows what to enter there, or any OpenID Connect application by its redirect URIs. Each is open to
+  everyone or to chosen groups; the client secret is shown once.
+- **People and groups:** invite people to sign in to applications only (the User role), and group them by hand or let
+  a group follow a group at an identity provider, refreshed at each sign-in.
 
 ## Run
 
@@ -39,6 +50,20 @@ product (ADR 0002). Viewers see everything; editors also change users and groups
 providers, members and API tokens; owners also manage owners. Owners and admins who sign in with a password must add
 an authenticator app or a passkey.
 
+## Connect an application
+
+**An OpenAsy product:** under Applications, choose it, enter the address people open it at and the groups that may
+use it. Then, in the product, open Settings, Sign-in, add a provider, choose OpenAsy Identity and enter the issuer,
+client ID and secret Identity shows; or set its `<P>OIDC_*` variables, also shown. Map Identity groups to the
+product's roles there, for example `Engineering = admin`.
+
+**Any other application:** choose Another application, give its redirect URIs, and set it up with the issuer, client
+ID and secret. It must send PKCE (S256); ask for the scopes `openid email profile groups`.
+
+**People from Keycloak, Entra ID, Okta or Google:** under Sign-in, an owner adds the provider and chooses Join as
+User for people nobody invited; they join the directory at their first sign-in. A group whose members come from
+`keycloak:ops-admins` follows that group.
+
 ## Endpoints
 
 | Path | |
@@ -46,6 +71,8 @@ an authenticator app or a passkey.
 | `/healthz`, `/readyz` | Liveness and readiness |
 | `/metrics` | Prometheus metrics |
 | `GET /api/v1/version` | Product and version |
+| `/.well-known/openid-configuration`, `/oidc/*` | The OpenID provider: the issuer is `IDENTITY_PUBLIC_URL` |
+| `/api/v1/applications`, `/api/v1/groups`, `/api/v1/people` | Applications, groups and the directory |
 | `/api/docs/` | Interactive API reference (Swagger UI), bundled in the image |
 | `/api/openapi.json` | OpenAPI 3.1 description |
 

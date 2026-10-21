@@ -3,7 +3,10 @@ import { createServer } from "node:http";
 import { createAuth, oidcFromEnv, readSecretsKey } from "@openasy/auth";
 import { createApp } from "./app.ts";
 import { openDb } from "./db.ts";
+import { createDirectory } from "./directory.ts";
+import { createKeyring } from "./kek.ts";
 import { log } from "./log.ts";
+import { createOidc } from "./oidc.ts";
 
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
 const port = Number(process.env.PORT ?? 8080);
@@ -29,6 +32,7 @@ if (!kek) {
 }
 
 const db = openDb(dbPath);
+const directory = createDirectory(db, createKeyring(kek));
 // The address people open Identity at, behind the TLS proxy (ADR 0026). It is also the OpenID issuer, so it must not
 // change once applications use it.
 const publicUrl = (process.env.IDENTITY_PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/$/, "");
@@ -39,16 +43,23 @@ const auth = createAuth({
   origin: publicUrl,
   trustedOrigins: publicUrl.startsWith("http://localhost:") ? [publicUrl.replace("localhost", "127.0.0.1")] : [],
   passwords: process.env.IDENTITY_PASSWORD_SIGN_IN !== "false",
+  // The directory: people who sign in to applications have the user role and do not manage Identity.
+  users: true,
   oidc: oidcFromEnv(process.env, "IDENTITY_"),
+  // Groups that follow an identity provider's group get their members at each sign-in.
+  onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups),
   secretsKey: kek,
   // Audit log (ADR 0013): every sign-in, failure and change to members and tokens.
   onEvent: (event) => log(event.type === "sign-in-failed" || event.type === "session-ended" ? "warn" : "info", "auth", { event }),
 });
+const oidc = createOidc({ db, keyring: createKeyring(kek), directory, auth, issuer: publicUrl });
 const server = createServer(
   createApp({
     db,
     version,
     auth,
+    directory,
+    oidc,
     webDir: !headless && existsSync(webDir) ? webDir : undefined,
     docsDir: existsSync(docsDir) ? docsDir : undefined,
     openapi,
@@ -62,7 +73,7 @@ if (!publicUrl.startsWith("https://") && !/^http:\/\/(localhost|127\.0\.0\.1)(:|
 const setup = auth.setupLink();
 // No default password (ADR 0013): the first person to open this link becomes the owner.
 if (setup) log("info", "no owner yet: open this link once to create the owner account", { url: setup });
-const purge = setInterval(() => auth.purge(), 5 * 60_000);
+const purge = setInterval(() => (auth.purge(), oidc.purge()), 5 * 60_000);
 
 function shutdown(signal: string) {
   log("info", "shutting down", { signal });

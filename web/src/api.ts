@@ -15,3 +15,38 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
+
+export interface Application {
+  id: string;
+  name: string;
+  template: "openasy-vpn" | "openasy-infrastructure" | "openasy-vulnerabilities" | "oidc";
+  redirectUris: string[];
+  postLogoutRedirectUris: string[];
+  everyone: boolean;
+  groups: string[];
+  createdAt: string;
+}
+
+/** A new application, or a new secret: the secret is shown once. */
+export interface ApplicationSecret {
+  application: Application;
+  clientSecret: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string;
+  syncedFrom: string | null;
+  members: number;
+  createdAt: string;
+}
+
+export interface Person {
+  id: string;
+  email: string;
+  name: string;
+  role: "owner" | "admin" | "editor" | "viewer" | "user";
+  status: "invited" | "active" | "disabled";
+  groups: string[];
+}

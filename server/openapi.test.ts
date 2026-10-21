@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { startApp } from "./test-app.ts";
+import { Browser, createOwner, startApp } from "./test-app.ts";
 
 // Contract tests (ADR 0024): every response the API sends must match openapi.json.
 
@@ -88,6 +88,41 @@ describe("responses match openapi.json", () => {
     await call("GET", "/healthz");
     await call("GET", "/readyz");
     await call("GET", "/metrics");
+  });
+
+  it("applications, groups and people", async () => {
+    const owner = await createOwner(app);
+    const as = (b: Browser, body?: unknown, method?: string) => ({
+      method,
+      headers: { origin: b.base, "user-agent": "Mozilla/5.0 (Macintosh) Chrome/141.0", cookie: [...b.cookies].map(([k, v]) => `${k}=${v}`).join("; "), "content-type": "application/json" },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
+    });
+    await call("GET", "/api/v1/applications", {});
+    const group = (await call("POST", "/api/v1/groups", as(owner, { name: "Engineering", description: "Builds things" }))).body as { id: string };
+    await call("POST", "/api/v1/groups", as(owner, { name: "Engineering" }));
+    await call("POST", "/api/v1/groups", as(owner, { name: "" }));
+    await call("POST", "/api/v1/groups", { ...as(owner), body: "nope" });
+    await call("GET", "/api/v1/groups", as(owner));
+    await call("PATCH", "/api/v1/groups/{id}", as(owner, { description: "Ships things" }), `/api/v1/groups/${group.id}`);
+    await call("PATCH", "/api/v1/groups/{id}", as(owner, { syncedFrom: "not a provider" }), `/api/v1/groups/${group.id}`);
+    await call("PATCH", "/api/v1/groups/{id}", as(owner, {}), "/api/v1/groups/missing");
+    await call("PUT", "/api/v1/groups/{id}/members", as(owner, { userIds: [] }), `/api/v1/groups/${group.id}/members`);
+    await call("PUT", "/api/v1/groups/{id}/members", as(owner, { userIds: ["nobody"] }), `/api/v1/groups/${group.id}/members`);
+    await call("PUT", "/api/v1/groups/{id}/members", as(owner, { userIds: [] }), "/api/v1/groups/missing/members");
+    await call("GET", "/api/v1/people", as(owner));
+
+    const created = (await call("POST", "/api/v1/applications", as(owner, { name: "VPN", template: "openasy-vpn", url: "https://vpn.example.com", groups: ["Engineering"] }))).body as { application: { id: string } };
+    await call("POST", "/api/v1/applications", as(owner, { name: "Bad", redirectUris: ["ftp://x"] }));
+    await call("GET", "/api/v1/applications", as(owner));
+    await call("GET", "/api/v1/applications/{id}", as(owner), `/api/v1/applications/${created.application.id}`);
+    await call("GET", "/api/v1/applications/{id}", as(owner), "/api/v1/applications/missing");
+    await call("PATCH", "/api/v1/applications/{id}", as(owner, { everyone: true }), `/api/v1/applications/${created.application.id}`);
+    await call("PATCH", "/api/v1/applications/{id}", as(owner, { groups: ["Nope"] }), `/api/v1/applications/${created.application.id}`);
+    await call("POST", "/api/v1/applications/{id}/secret", as(owner, {}), `/api/v1/applications/${created.application.id}/secret`);
+    await call("DELETE", "/api/v1/applications/{id}", as(owner, undefined, "DELETE"), `/api/v1/applications/${created.application.id}`);
+    await call("DELETE", "/api/v1/applications/{id}", as(owner, undefined, "DELETE"), `/api/v1/applications/${created.application.id}`);
+    await call("DELETE", "/api/v1/groups/{id}", as(owner, undefined, "DELETE"), `/api/v1/groups/${group.id}`);
+    await call("DELETE", "/api/v1/groups/{id}", as(owner, undefined, "DELETE"), `/api/v1/groups/${group.id}`);
   });
 
   it("covers every operation in openapi.json", () => {

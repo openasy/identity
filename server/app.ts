@@ -4,13 +4,17 @@ import { extname, join, normalize } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { AuthError, mergeOpenApi, sendProblem, type Auth, type Role } from "@openasy/auth";
 import { log } from "./log.ts";
+import type { Directory } from "./directory.ts";
 import { countRequest, renderMetrics } from "./metrics.ts";
+import type { Oidc } from "./oidc.ts";
 
 export interface AppOptions {
   db: DatabaseSync;
   version: string;
   /** Sign-in, sessions, members and API tokens (ADR 0002, 0003). */
   auth: Auth;
+  directory: Directory;
+  oidc: Oidc;
   /** Built web UI; omit to run headless (ADR 0018). */
   webDir?: string;
   /** Built API reference (Swagger UI), served at /api/docs. */
@@ -119,11 +123,34 @@ interface Route {
   handle: (ctx: Ctx) => unknown;
 }
 
-export function createApp({ db, version, auth, webDir, docsDir, openapi }: AppOptions) {
+export function createApp({ db, version, auth, directory, oidc, webDir, docsDir, openapi }: AppOptions) {
   // The served description includes /api/v1/auth from @openasy/auth, so the API reference documents sign-in too.
   const spec = openapi && JSON.stringify({ ...mergeOpenApi(openapi), info: { ...(openapi.info as object), version } });
 
-  const routes: Route[] = [{ method: "GET", path: "/api/v1/version", auth: "none", handle: () => ({ product: "identity", version }) }];
+  const created = (res: ServerResponse, data: unknown) => (json(res, 201, data), undefined);
+  const noContent = (res: ServerResponse) => (res.writeHead(204, SECURITY_HEADERS).end(), undefined);
+
+  const routes: Route[] = [
+    { method: "GET", path: "/api/v1/version", auth: "none", handle: () => ({ product: "identity", version }) },
+
+    // Applications people sign in to (OpenID Connect clients). Admins change them: they decide who gets in.
+    { method: "GET", path: "/api/v1/applications", auth: "viewer", handle: () => ({ applications: directory.listApplications(), issuer: oidc.provider.issuer }) },
+    { method: "POST", path: "/api/v1/applications", auth: "admin", handle: async ({ res, body }) => created(res, directory.createApplication(await body())) },
+    { method: "GET", path: "/api/v1/applications/:id", auth: "viewer", handle: ({ params }) => directory.application(params[0]!) },
+    { method: "PATCH", path: "/api/v1/applications/:id", auth: "admin", handle: async ({ params, body }) => directory.updateApplication(params[0]!, await body()) },
+    { method: "DELETE", path: "/api/v1/applications/:id", auth: "admin", handle: ({ res, params }) => (directory.deleteApplication(params[0]!), noContent(res)) },
+    { method: "POST", path: "/api/v1/applications/:id/secret", auth: "admin", handle: ({ params }) => directory.newSecret(params[0]!) },
+
+    // Groups and the people in them. Editors change them.
+    { method: "GET", path: "/api/v1/groups", auth: "viewer", handle: () => ({ groups: directory.listGroups() }) },
+    { method: "POST", path: "/api/v1/groups", auth: "editor", handle: async ({ res, body }) => created(res, directory.createGroup(await body())) },
+    { method: "PATCH", path: "/api/v1/groups/:id", auth: "editor", handle: async ({ params, body }) => directory.updateGroup(params[0]!, await body()) },
+    { method: "DELETE", path: "/api/v1/groups/:id", auth: "editor", handle: ({ res, params }) => (directory.deleteGroup(params[0]!), noContent(res)) },
+    { method: "PUT", path: "/api/v1/groups/:id/members", auth: "editor", handle: async ({ params, body }) => directory.setMembers(params[0]!, (await body()).userIds) },
+
+    // The directory: everyone who can sign in, with their groups.
+    { method: "GET", path: "/api/v1/people", auth: "viewer", handle: () => ({ people: directory.listPeople() }) },
+  ];
 
   const compiled = routes.map((r) => ({ ...r, re: new RegExp(`^${r.path.replace(/:[a-z]+/g, "([^/]+)")}$`) }));
 
@@ -160,6 +187,8 @@ export function createApp({ db, version, auth, webDir, docsDir, openapi }: AppOp
       if (!(await serveFile(res, docsDir, relative))) problem(res, 404, "not-found");
       return "/api/docs";
     }
+
+    if (await oidc.handle(req, res, path)) return path.startsWith("/interaction/") ? "/interaction/:uid" : "/oidc";
 
     if (await auth.handle(req, res)) return auth.routeName(req) ?? "/api/v1/auth/*";
 

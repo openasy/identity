@@ -6,6 +6,53 @@ import { DatabaseSync } from "node:sqlite";
 const MIGRATIONS = [
   // 0.1.0: settings, such as the signing keys of the OpenID provider, sealed with the key-encryption key (ADR 0021).
   `CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+  // 0.1.0: the directory and the OpenID provider (ADR 0033). People are @openasy/auth's auth_users; groups decide who
+  // may sign in to which application, and go to applications in the groups claim.
+  `CREATE TABLE groups (
+     id TEXT PRIMARY KEY,
+     name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+     description TEXT NOT NULL DEFAULT '',
+     -- "<provider>:<group>": members come from that identity provider's group at each sign-in, not by hand.
+     synced_from TEXT UNIQUE,
+     created_at TEXT NOT NULL
+   );
+   CREATE TABLE group_members (
+     group_id TEXT NOT NULL REFERENCES groups (id) ON DELETE CASCADE,
+     user_id TEXT NOT NULL,
+     added_at TEXT NOT NULL,
+     PRIMARY KEY (group_id, user_id)
+   );
+   CREATE INDEX group_members_user ON group_members (user_id);
+   -- OpenID Connect clients. The secret is sealed: the provider needs it in the clear to check client_secret_basic.
+   CREATE TABLE applications (
+     id TEXT PRIMARY KEY,
+     name TEXT NOT NULL,
+     template TEXT NOT NULL,
+     client_secret TEXT NOT NULL,
+     redirect_uris TEXT NOT NULL,
+     post_logout_redirect_uris TEXT NOT NULL DEFAULT '[]',
+     everyone INTEGER NOT NULL DEFAULT 0,
+     created_at TEXT NOT NULL
+   );
+   CREATE TABLE application_groups (
+     application_id TEXT NOT NULL REFERENCES applications (id) ON DELETE CASCADE,
+     group_id TEXT NOT NULL REFERENCES groups (id) ON DELETE CASCADE,
+     PRIMARY KEY (application_id, group_id)
+   );
+   -- What oidc-provider stores: sessions, interactions, codes, tokens and grants, as JSON.
+   CREATE TABLE oidc_models (
+     model TEXT NOT NULL,
+     id TEXT NOT NULL,
+     payload TEXT NOT NULL,
+     grant_id TEXT,
+     uid TEXT,
+     user_code TEXT,
+     expires_at INTEGER,
+     consumed_at INTEGER,
+     PRIMARY KEY (model, id)
+   );
+   CREATE INDEX oidc_models_grant ON oidc_models (grant_id);
+   CREATE INDEX oidc_models_uid ON oidc_models (uid);`,
 ];
 
 /** Opens the product's single SQLite file in WAL mode (ADR 0011) and migrates it forward. */
