@@ -118,6 +118,23 @@ describe("a second factor per group", () => {
   });
 });
 
+describe("passkey-only groups", () => {
+  it("ask for a passkey even after an authenticator app, and let a passkey session in", async () => {
+    const eng = (await owner.json<{ groups: Array<{ id: string; name: string }> }>("/api/v1/groups")).body.groups.find((g) => g.name === "Engineering")!;
+    await owner.json(`/api/v1/groups/${eng.id}`, { method: "PATCH", body: { mfa: "passkey" } });
+    const verifier = client.randomPKCECodeVerifier();
+    const url = client.buildAuthorizationUrl(rp, { redirect_uri: CALLBACK, scope: "openid", code_challenge: await client.calculatePKCECodeChallenge(verifier), code_challenge_method: "S256", state: "s" });
+    const interaction = new URL((await uma.browser.fetch(url.href)).headers.get("location")!, app.base).pathname;
+    // Uma's session has an authenticator app: strong, but not a passkey.
+    expect((await uma.browser.fetch(interaction)).headers.get("location")).toBe(`/?return=${encodeURIComponent(interaction)}&mfa=passkey`);
+
+    // A session opened with a passkey (as @openasy/auth records it) gets through.
+    app.db.prepare("UPDATE auth_sessions SET factor = 'passkey' WHERE user_id = ?").run(uma.id);
+    expect((await signIn(uma.browser)).landed.searchParams.get("code")).toBeTruthy();
+    await owner.json(`/api/v1/groups/${eng.id}`, { method: "PATCH", body: { mfa: "optional" } });
+  });
+});
+
 describe("the audit log", () => {
   it("keeps sign-ins to applications, refusals and changes, with who did them", async () => {
     const { events } = (await owner.json<{ events: Array<{ type: string; actorName: string | null; applicationName: string | null; detail?: string }> }>("/api/v1/audit")).body;
@@ -126,6 +143,7 @@ describe("the audit log", () => {
     expect(events.find((e) => e.type === "app-sign-in")).toMatchObject({ actorName: "Uma", applicationName: "Grafana" });
     expect(events.find((e) => e.type === "application-added")).toMatchObject({ actorName: "Olivia Owner" });
     expect(events.find((e) => e.type === "app-sign-in-refused" && e.detail === "second factor needed")).toBeDefined();
+    expect(events.find((e) => e.type === "app-sign-in-refused" && e.detail === "passkey needed")).toBeDefined();
     expect((await owner.json<{ events: unknown[] }>("/api/v1/audit?type=app-sign-in&limit=1")).body.events).toHaveLength(1);
     expect((await owner.json("/api/v1/audit?limit=0")).status).toBe(422);
   });

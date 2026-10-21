@@ -14,8 +14,8 @@ export interface Group {
   name: string;
   description: string;
   syncedFrom: string | null;
-  /** required: members sign in to applications with a second factor. */
-  mfa: "optional" | "required";
+  /** required: members sign in to applications with a second factor; passkey: only with a passkey. */
+  mfa: "optional" | "required" | "passkey";
   members: number;
   createdAt: string;
 }
@@ -85,7 +85,7 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
 
   function mfa(v: unknown, current: Group["mfa"] = "optional"): Group["mfa"] {
     if (v === undefined) return current;
-    if (v !== "optional" && v !== "required") throw invalid('mfa must be "optional" or "required".');
+    if (v !== "optional" && v !== "required" && v !== "passkey") throw invalid('mfa must be "optional", "required" or "passkey".');
     return v;
   }
 
@@ -171,8 +171,11 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
       providers: (db.prepare("SELECT provider FROM auth_identities WHERE user_id = ? ORDER BY provider").all(p.id) as Array<{ provider: string }>).map((i) => i.provider),
     }));
 
-  /** Whether one of someone's groups asks for a second factor at sign-in to applications. */
-  const mfaRequired = (userId: string) => !!db.prepare("SELECT 1 FROM group_members m JOIN groups g ON g.id = m.group_id WHERE m.user_id = ? AND g.mfa = 'required'").get(userId);
+  /** The most any of someone's groups asks of their sign-in to applications: a passkey, a second factor, or nothing. */
+  function mfaRequired(userId: string): "passkey" | "required" | undefined {
+    const levels = (db.prepare("SELECT DISTINCT g.mfa FROM group_members m JOIN groups g ON g.id = m.group_id WHERE m.user_id = ?").all(userId) as Array<{ mfa: Group["mfa"] }>).map((r) => r.mfa);
+    return levels.includes("passkey") ? "passkey" : levels.includes("required") ? "required" : undefined;
+  }
 
   /** What applications learn about someone, by scope. Only active people sign in. */
   function account(userId: string) {

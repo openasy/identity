@@ -38,7 +38,7 @@ export interface Group {
   name: string;
   description: string;
   syncedFrom: string | null;
-  mfa: "optional" | "required";
+  mfa: "optional" | "required" | "passkey";
   members: number;
   createdAt: string;
 }

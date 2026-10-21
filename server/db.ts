@@ -67,6 +67,11 @@ const MIGRATIONS = [
      detail TEXT
    );
    CREATE INDEX audit_at ON audit (at);`,
+  // 0.1.0: groups that only accept a passkey (ADR 0034).
+  `ALTER TABLE groups RENAME COLUMN mfa TO mfa_old;
+   ALTER TABLE groups ADD COLUMN mfa TEXT NOT NULL DEFAULT 'optional' CHECK (mfa IN ('optional', 'required', 'passkey'));
+   UPDATE groups SET mfa = mfa_old;
+   ALTER TABLE groups DROP COLUMN mfa_old;`,
 ];
 
 /** Opens the product's single SQLite file in WAL mode (ADR 0011) and migrates it forward. */

@@ -11,6 +11,15 @@ import type { Directory } from "./directory.ts";
 import type { Keyring } from "./kek.ts";
 import { log } from "./log.ts";
 
+/** Who is signed in to Identity, and with what. */
+interface Session {
+  id: string;
+  /** Opened with a second factor, a passkey, or through an identity provider. */
+  strong: boolean;
+  /** Opened with a passkey, alone or as the second step, or one was added during it. */
+  passkey: boolean;
+}
+
 /** The address a request came from, as the access log has it. */
 const clientIpOf = (req: IncomingMessage) => req.socket.remoteAddress ?? undefined;
 
@@ -108,16 +117,21 @@ export function createOidc({ db, keyring, directory, auth, audit, issuer }: Oidc
    * Who is signed in to Identity in this browser, if anyone, and whether that session is strong: opened with a second
    * factor or a passkey, or through an identity provider, which handles its own (ADR 0002).
    */
-  const signedIn = (req: IncomingMessage): { id: string; strong: boolean } | undefined => {
+  const signedIn = (req: IncomingMessage): Session | undefined => {
     try {
       const p = auth.authorize(req, "user");
-      return p.kind === "session" ? { id: p.user.id, strong: p.mfa || p.method === "passkey" || p.method.startsWith("oidc:") } : undefined;
+      return p.kind === "session" ? { id: p.user.id, strong: p.mfa || p.method === "passkey" || p.method.startsWith("oidc:"), passkey: p.factor === "passkey" } : undefined;
     } catch {
       return undefined;
     }
   };
-  /** Someone's groups ask for a second factor and this session was opened without one. */
-  const needsSecondFactor = (s: { id: string; strong: boolean }) => !s.strong && directory.mfaRequired(s.id);
+  /** What someone's groups ask of this session that it does not have: a passkey, a second factor, or nothing. */
+  function missing(s: Session): "passkey" | "required" | undefined {
+    const level = directory.mfaRequired(s.id);
+    if (level === "passkey") return s.passkey ? undefined : "passkey";
+    if (level === "required") return s.strong ? undefined : "required";
+    return undefined;
+  }
 
   // Identity's sign-in is the session: the provider asks again when it no longer matches, or when someone's groups
   // now ask for a second factor their session does not have.
@@ -126,7 +140,7 @@ export function createOidc({ db, keyring, directory, auth, audit, issuer }: Oidc
     new interactionPolicy.Check("identity_session", "Sign in to Identity", (ctx) => {
       const accountId = ctx.oidc.session?.accountId;
       const s = signedIn(ctx.req);
-      return !accountId || s?.id !== accountId || needsSecondFactor(s) ? interactionPolicy.Check.REQUEST_PROMPT : interactionPolicy.Check.NO_NEED_TO_PROMPT;
+      return !accountId || s?.id !== accountId || missing(s) ? interactionPolicy.Check.REQUEST_PROMPT : interactionPolicy.Check.NO_NEED_TO_PROMPT;
     }),
   );
   const refused = (application: string, actor: string, detail: string, ip?: string) => audit.record({ type: "app-sign-in-refused", application, actor, detail, ip });
@@ -224,10 +238,11 @@ export function createOidc({ db, keyring, directory, auth, audit, issuer }: Oidc
       await provider.interactionFinished(req, res, { error: "access_denied", error_description: "You may not use this application. Ask an admin to add you to one of its groups." }, { mergeWithLastSubmission: false });
       return;
     }
-    // Their groups ask for a second factor: they add one, or sign in again with it, and come back here.
-    if (needsSecondFactor(s)) {
-      refused(clientId, s.id, "second factor needed", clientIpOf(req));
-      res.writeHead(303, { location: `/?return=${back}&mfa=required` }).end();
+    // Their groups ask for a second factor or a passkey: they add it, or sign in again with it, and come back here.
+    const need = missing(s);
+    if (need) {
+      refused(clientId, s.id, need === "passkey" ? "passkey needed" : "second factor needed", clientIpOf(req));
+      res.writeHead(303, { location: `/?return=${back}&mfa=${need}` }).end();
       return;
     }
     await provider.interactionFinished(req, res, { login: { accountId: s.id } }, { mergeWithLastSubmission: false });

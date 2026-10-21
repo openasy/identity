@@ -1206,9 +1206,10 @@
             "type": "string",
             "enum": [
               "optional",
-              "required"
+              "required",
+              "passkey"
             ],
-            "description": "required: members sign in to applications with a second factor, a passkey or an identity provider."
+            "description": "required: members sign in to applications with a second factor, a passkey or an identity provider. passkey: only with a passkey."
           }
         }
       },
@@ -1248,9 +1249,10 @@
             "type": "string",
             "enum": [
               "optional",
-              "required"
+              "required",
+              "passkey"
             ],
-            "description": "required: members sign in to applications with a second factor, a passkey or an identity provider."
+            "description": "required: members sign in to applications with a second factor, a passkey or an identity provider. passkey: only with a passkey."
           }
         }
       },
@@ -1273,9 +1275,10 @@
             "type": "string",
             "enum": [
               "optional",
-              "required"
+              "required",
+              "passkey"
             ],
-            "description": "required: members sign in to applications with a second factor, a passkey or an identity provider."
+            "description": "required: members sign in to applications with a second factor, a passkey or an identity provider. passkey: only with a passkey."
           }
         }
       },

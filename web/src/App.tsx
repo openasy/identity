@@ -34,7 +34,8 @@ function keepReturn() {
   if (!to) return;
   if (/^\/interaction\/[\w-]+$/.test(to)) {
     sessionStorage.setItem(RETURN, to);
-    if (url.searchParams.get("mfa") === "required") sessionStorage.setItem(MFA, "1");
+    const mfa = url.searchParams.get("mfa");
+    if (mfa === "required" || mfa === "passkey") sessionStorage.setItem(MFA, mfa);
     else sessionStorage.removeItem(MFA);
   }
   url.searchParams.delete("return");
@@ -48,9 +49,11 @@ function Product() {
   const call = useApi();
   const [page, setPage] = useState<Page>(() => parsePage(window.location.hash));
   const [returning] = useState(() => sessionStorage.getItem(RETURN));
-  // A session opened with a second factor, a passkey or an identity provider is strong enough for every group.
+  // What the application's groups ask for: a session with a second factor (or a passkey, or through an identity
+  // provider), or one with a passkey.
+  const asked = sessionStorage.getItem(MFA);
   const strong = me.session.mfa || me.session.method === "passkey" || me.session.method.startsWith("oidc:");
-  const waitForFactor = !!returning && sessionStorage.getItem(MFA) === "1" && !strong;
+  const waitForFactor = !!returning && (asked === "passkey" ? me.session.factor !== "passkey" : asked === "required" && !strong);
   const continueToApp = () => {
     sessionStorage.removeItem(RETURN);
     sessionStorage.removeItem(MFA);
@@ -116,9 +119,13 @@ function Product() {
             }
           />
           {waitForFactor && (
-            <Callout tone="warning" title="Add a second factor to continue" className="mb-3">
+            <Callout tone="warning" title={asked === "passkey" ? "Use a passkey to continue" : "Add a second factor to continue"} className="mb-3">
               <span className="flex flex-col items-start gap-2">
-                <span>The application you are signing in to asks for one. Add an authenticator app or a passkey below, then continue.</span>
+                <span>
+                  {asked === "passkey"
+                    ? "The application you are signing in to accepts only a passkey. Add one below, or sign out and sign in again with yours, then continue."
+                    : "The application you are signing in to asks for one. Add an authenticator app or a passkey below, then continue."}
+                </span>
                 <Button variant="primary" iconRight={<ArrowRight />} onClick={continueToApp}>
                   Continue to the application
                 </Button>

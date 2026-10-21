@@ -8,6 +8,7 @@ import { List, Problem, useAction, useData, type Call } from "./shared.tsx";
 const MFA_OPTIONS = [
   { value: "optional", label: "Optional" },
   { value: "required", label: "Required" },
+  { value: "passkey", label: "Passkey only" },
 ];
 
 /** Choosing a group's members by hand; groups that follow a provider take theirs from it. */
