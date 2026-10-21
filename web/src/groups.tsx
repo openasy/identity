@@ -1,9 +1,14 @@
-import { Badge, Button, Checkbox, PageHeader, Panel, TextField, type Column } from "@openasy/ui";
+import { Badge, Button, Checkbox, PageHeader, Panel, SelectField, TextField, type Column } from "@openasy/ui";
 import { useAuth } from "@openasy/auth/react";
 import { Plus, Trash2, Users } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { Group, Person } from "./api.ts";
 import { List, Problem, useAction, useData, type Call } from "./shared.tsx";
+
+const MFA_OPTIONS = [
+  { value: "optional", label: "Optional" },
+  { value: "required", label: "Required" },
+];
 
 /** Choosing a group's members by hand; groups that follow a provider take theirs from it. */
 function Members({ call, group, people, onDone }: { call: Call; group: Group; people: Person[]; onDone: () => void }) {
@@ -37,16 +42,18 @@ export function GroupsPage({ call }: { call: Call }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [syncedFrom, setSyncedFrom] = useState("");
+  const [mfa, setMfa] = useState<Group["mfa"]>("optional");
   const [editing, setEditing] = useState<Group>();
   const action = useAction();
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
     await action.run(async () => {
-      await call("/api/v1/groups", { method: "POST", body: JSON.stringify({ name, description, syncedFrom: syncedFrom.trim() || null }) });
+      await call("/api/v1/groups", { method: "POST", body: JSON.stringify({ name, description, mfa, syncedFrom: syncedFrom.trim() || null }) });
       setName("");
       setDescription("");
       setSyncedFrom("");
+      setMfa("optional");
       reload();
     });
   };
@@ -55,7 +62,23 @@ export function GroupsPage({ call }: { call: Call }) {
     { id: "name", header: "Group", cell: (g) => g.name, sortValue: (g) => g.name },
     { id: "description", header: "Description", cell: (g) => g.description || <span className="text-fg-muted">none</span> },
     { id: "members", header: "Members", width: "100px", align: "right", cell: (g) => g.members, sortValue: (g) => g.members },
-    { id: "source", header: "Members from", width: "220px", cell: (g) => (g.syncedFrom ? <Badge tone="info">{g.syncedFrom}</Badge> : "Chosen here") },
+    { id: "source", header: "Members from", width: "200px", cell: (g) => (g.syncedFrom ? <Badge tone="info">{g.syncedFrom}</Badge> : "Chosen here") },
+    {
+      id: "mfa",
+      header: "Second factor",
+      width: "160px",
+      cell: (g) =>
+        can("editor") ? (
+          <SelectField
+            aria-label={`Second factor for ${g.name}`}
+            value={g.mfa}
+            options={MFA_OPTIONS}
+            onChange={(e) => void action.run(() => call(`/api/v1/groups/${g.id}`, { method: "PATCH", body: JSON.stringify({ mfa: e.target.value }) }).then(reload))}
+          />
+        ) : (
+          MFA_OPTIONS.find((o) => o.value === g.mfa)!.label
+        ),
+    },
     ...(can("editor")
       ? [
           {
@@ -81,12 +104,16 @@ export function GroupsPage({ call }: { call: Call }) {
 
   return (
     <>
-      <PageHeader title="Groups" description="Groups decide who may sign in to which application, and applications receive them to give people roles." />
+      <PageHeader
+        title="Groups"
+        description="Groups decide who may sign in to which application, and applications receive them to give people roles. Where a second factor is required, members sign in to applications with an authenticator app, a passkey or an identity provider."
+      />
       {can("editor") && (
         <Panel title="Add a group">
           <form onSubmit={add} className="flex flex-wrap items-end gap-2">
             <TextField label="Name" placeholder="Engineering" value={name} onChange={(e) => setName(e.target.value)} />
             <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <SelectField label="Second factor" value={mfa} options={MFA_OPTIONS} onChange={(e) => setMfa(e.target.value as Group["mfa"])} />
             <TextField
               label="Members from a provider"
               mono

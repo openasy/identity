@@ -53,6 +53,20 @@ const MIGRATIONS = [
    );
    CREATE INDEX oidc_models_grant ON oidc_models (grant_id);
    CREATE INDEX oidc_models_uid ON oidc_models (uid);`,
+  // 0.1.0: a second factor per group, and the audit log (ADR 0013): kept 400 days, also written to the JSON log.
+  `ALTER TABLE groups ADD COLUMN mfa TEXT NOT NULL DEFAULT 'optional' CHECK (mfa IN ('optional', 'required'));
+   CREATE TABLE audit (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     at TEXT NOT NULL,
+     type TEXT NOT NULL,
+     actor TEXT,
+     target TEXT,
+     application TEXT,
+     method TEXT,
+     ip TEXT,
+     detail TEXT
+   );
+   CREATE INDEX audit_at ON audit (at);`,
 ];
 
 /** Opens the product's single SQLite file in WAL mode (ADR 0011) and migrates it forward. */

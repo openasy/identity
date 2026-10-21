@@ -38,6 +38,7 @@ export interface Group {
   name: string;
   description: string;
   syncedFrom: string | null;
+  mfa: "optional" | "required";
   members: number;
   createdAt: string;
 }
@@ -49,4 +50,30 @@ export interface Person {
   role: "owner" | "admin" | "editor" | "viewer" | "user";
   status: "invited" | "active" | "disabled";
   groups: string[];
+  secondFactor: boolean;
+  providers: string[];
+}
+
+export interface AuditEvent {
+  id: number;
+  at: string;
+  type: string;
+  actor?: string;
+  actorName: string | null;
+  target?: string;
+  application?: string;
+  applicationName: string | null;
+  method?: string;
+  ip?: string;
+  detail?: string;
+}
+
+export interface Overview {
+  people: number;
+  applications: number;
+  groups: number;
+  appSignIns24h: number;
+  refused24h: number;
+  failedSignIns24h: number;
+  withoutSecondFactor: Array<{ id: string; name: string; email: string }>;
 }

@@ -14,6 +14,8 @@ export interface Group {
   name: string;
   description: string;
   syncedFrom: string | null;
+  /** required: members sign in to applications with a second factor. */
+  mfa: "optional" | "required";
   members: number;
   createdAt: string;
 }
@@ -36,6 +38,10 @@ export interface Person {
   role: string;
   status: string;
   groups: string[];
+  /** Has an authenticator app or a passkey. */
+  secondFactor: boolean;
+  /** Signs in through an identity provider, which handles their second factor. */
+  providers: string[];
 }
 
 /** Applications that start from a template: OpenAsy products fill in their callback address. */
@@ -53,11 +59,12 @@ type AppRow = { id: string; name: string; template: string; client_secret: strin
 export function createDirectory(db: DatabaseSync, keyring: Keyring) {
   // ---- groups ---------------------------------------------------------------------------------------------------
 
-  const toGroup = (r: { id: string; name: string; description: string; synced_from: string | null; created_at: string }): Group => ({
+  const toGroup = (r: { id: string; name: string; description: string; synced_from: string | null; mfa: Group["mfa"]; created_at: string }): Group => ({
     id: r.id,
     name: r.name,
     description: r.description,
     syncedFrom: r.synced_from,
+    mfa: r.mfa,
     members: (db.prepare("SELECT COUNT(*) AS n FROM group_members WHERE group_id = ?").get(r.id) as { n: number }).n,
     createdAt: r.created_at,
   });
@@ -76,6 +83,12 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     return v.trim();
   }
 
+  function mfa(v: unknown, current: Group["mfa"] = "optional"): Group["mfa"] {
+    if (v === undefined) return current;
+    if (v !== "optional" && v !== "required") throw invalid('mfa must be "optional" or "required".');
+    return v;
+  }
+
   function syncedFrom(v: unknown): string | null {
     if (v === undefined || v === null || v === "") return null;
     if (typeof v !== "string" || !/^[a-z0-9-]{1,32}:.{1,256}$/.test(v)) throw invalid('syncedFrom is "<provider id>:<group at the provider>", for example keycloak:ops-admins.');
@@ -88,7 +101,7 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     const from = syncedFrom(b.syncedFrom);
     if (from && db.prepare("SELECT 1 FROM groups WHERE synced_from = ?").get(from)) throw new HttpProblem(409, "conflict", `A group already follows ${from}.`);
     const id = randomUUID();
-    db.prepare("INSERT INTO groups (id, name, description, synced_from, created_at) VALUES (?, ?, ?, ?, ?)").run(id, name, text(b.description, "description", 500, true) ?? "", from, now());
+    db.prepare("INSERT INTO groups (id, name, description, synced_from, mfa, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, name, text(b.description, "description", 500, true) ?? "", from, mfa(b.mfa), now());
     return group(id);
   }
 
@@ -98,7 +111,7 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     if (name !== current.name && db.prepare("SELECT 1 FROM groups WHERE name = ? AND id != ?").get(name, id)) throw new HttpProblem(409, "conflict", `A group named ${name} exists.`);
     const description = b.description === undefined ? current.description : (text(b.description, "description", 500, true) ?? "");
     const from = b.syncedFrom === undefined ? current.syncedFrom : syncedFrom(b.syncedFrom);
-    db.prepare("UPDATE groups SET name = ?, description = ?, synced_from = ? WHERE id = ?").run(name, description, from, id);
+    db.prepare("UPDATE groups SET name = ?, description = ?, synced_from = ?, mfa = ? WHERE id = ?").run(name, description, from, mfa(b.mfa, current.mfa), id);
     // A group that starts following a provider gets its members from there, at each person's next sign-in.
     if (from && from !== current.syncedFrom) db.prepare("DELETE FROM group_members WHERE group_id = ?").run(id);
     return group(id);
@@ -143,7 +156,23 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
   // ---- people ---------------------------------------------------------------------------------------------------
 
   const listPeople = (): Person[] =>
-    (db.prepare("SELECT id, email, name, role, status FROM auth_users ORDER BY name COLLATE NOCASE").all() as Array<Omit<Person, "groups">>).map((p) => ({ ...p, groups: groupsOf(p.id) }));
+    (
+      db
+        .prepare(
+          `SELECT u.id, u.email, u.name, u.role, u.status,
+             EXISTS (SELECT 1 FROM auth_totp t WHERE t.user_id = u.id AND t.confirmed = 1) OR EXISTS (SELECT 1 FROM auth_passkeys k WHERE k.user_id = u.id) AS second_factor
+           FROM auth_users u ORDER BY u.name COLLATE NOCASE`,
+        )
+        .all() as Array<Omit<Person, "groups" | "secondFactor" | "providers"> & { second_factor: number }>
+    ).map(({ second_factor, ...p }) => ({
+      ...p,
+      groups: groupsOf(p.id),
+      secondFactor: second_factor === 1,
+      providers: (db.prepare("SELECT provider FROM auth_identities WHERE user_id = ? ORDER BY provider").all(p.id) as Array<{ provider: string }>).map((i) => i.provider),
+    }));
+
+  /** Whether one of someone's groups asks for a second factor at sign-in to applications. */
+  const mfaRequired = (userId: string) => !!db.prepare("SELECT 1 FROM group_members m JOIN groups g ON g.id = m.group_id WHERE m.user_id = ? AND g.mfa = 'required'").get(userId);
 
   /** What applications learn about someone, by scope. Only active people sign in. */
   function account(userId: string) {
@@ -306,6 +335,7 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     setMembers,
     syncGroups,
     listPeople,
+    mfaRequired,
     account,
     listApplications,
     application,

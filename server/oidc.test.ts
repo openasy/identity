@@ -2,7 +2,7 @@
 // Identity's own sign-in is the session (ADR 0033).
 import * as client from "openid-client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Browser, createOwner, PASSWORD, startApp } from "./test-app.ts";
+import { Browser, createOwner, PASSWORD, startApp, totp } from "./test-app.ts";
 
 const CALLBACK = "http://localhost:4999/callback";
 
@@ -99,6 +99,48 @@ describe("the OpenID provider", () => {
   });
 });
 
+describe("a second factor per group", () => {
+  it("sends people without one to add it, then lets them in", async () => {
+    const eng = (await owner.json<{ groups: Array<{ id: string; name: string }> }>("/api/v1/groups")).body.groups.find((g) => g.name === "Engineering")!;
+    expect((await owner.json<{ mfa: string }>(`/api/v1/groups/${eng.id}`, { method: "PATCH", body: { mfa: "required" } })).body.mfa).toBe("required");
+    await uma.browser.json("/api/v1/auth/login", { body: { email: "uma@example.com", password: PASSWORD } });
+
+    const verifier = client.randomPKCECodeVerifier();
+    const url = client.buildAuthorizationUrl(rp, { redirect_uri: CALLBACK, scope: "openid", code_challenge: await client.calculatePKCECodeChallenge(verifier), code_challenge_method: "S256", state: "s" });
+    const interaction = new URL((await uma.browser.fetch(url.href)).headers.get("location")!, app.base).pathname;
+    expect((await uma.browser.fetch(interaction)).headers.get("location")).toBe(`/?return=${encodeURIComponent(interaction)}&mfa=required`);
+
+    // Adding a factor makes this session strong: the same sign-in continues.
+    const { body } = await uma.browser.json<{ secret: string }>("/api/v1/auth/me/totp", { body: {} });
+    await uma.browser.json("/api/v1/auth/me/totp/confirm", { body: { code: totp(body.secret) } });
+    expect((await signIn(uma.browser)).landed.searchParams.get("code")).toBeTruthy();
+    await owner.json(`/api/v1/groups/${eng.id}`, { method: "PATCH", body: { mfa: "optional" } });
+  });
+});
+
+describe("the audit log", () => {
+  it("keeps sign-ins to applications, refusals and changes, with who did them", async () => {
+    const { events } = (await owner.json<{ events: Array<{ type: string; actorName: string | null; applicationName: string | null; detail?: string }> }>("/api/v1/audit")).body;
+    const types = events.map((e) => e.type);
+    expect(types).toEqual(expect.arrayContaining(["app-sign-in", "app-sign-in-refused", "application-added", "group-added", "sign-in", "member-invited"]));
+    expect(events.find((e) => e.type === "app-sign-in")).toMatchObject({ actorName: "Uma", applicationName: "Grafana" });
+    expect(events.find((e) => e.type === "application-added")).toMatchObject({ actorName: "Olivia Owner" });
+    expect(events.find((e) => e.type === "app-sign-in-refused" && e.detail === "second factor needed")).toBeDefined();
+    expect((await owner.json<{ events: unknown[] }>("/api/v1/audit?type=app-sign-in&limit=1")).body.events).toHaveLength(1);
+    expect((await owner.json("/api/v1/audit?limit=0")).status).toBe(422);
+  });
+
+  it("sums up the last day on the overview", async () => {
+    const o = (await owner.json<Record<string, unknown>>("/api/v1/overview")).body;
+    expect(o).toMatchObject({ people: 2, applications: 1, groups: 1 });
+    // A sign-in counts once the application exchanged its code: one test here does.
+    expect(o.appSignIns24h).toBe(1);
+    expect(o.refused24h).toBeGreaterThanOrEqual(1);
+    // Uma has an authenticator app now and the owner had one from the start.
+    expect(o.withoutSecondFactor).toEqual([]);
+  });
+});
+
 describe("the directory", () => {
   it("keeps groups that follow an identity provider in step with it", async () => {
     const g = await owner.json<{ id: string }>("/api/v1/groups", { body: { name: "Ops", syncedFrom: "corp:ops-admins" } });
@@ -115,7 +157,8 @@ describe("the directory", () => {
     await ed.json(`/api/v1/auth/links/${new URL(editorLink.body.link).searchParams.get("link")}`, { body: { password: PASSWORD } });
     expect((await ed.json("/api/v1/applications")).status).toBe(200);
     expect((await ed.json("/api/v1/applications", { body: { name: "x", redirectUris: [CALLBACK] } })).status).toBe(403);
-    expect((await uma.browser.json("/api/v1/applications")).status).toBe(401);
+    // People with the user role sign in to applications, not to Identity's API.
+    expect((await uma.browser.json("/api/v1/applications")).status).toBe(403);
 
     const list = await owner.json<{ applications: Array<Record<string, unknown>>; issuer: string }>("/api/v1/applications");
     expect(list.body.issuer).toBe(app.base);

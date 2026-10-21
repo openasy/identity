@@ -110,6 +110,11 @@ describe("responses match openapi.json", () => {
     await call("PUT", "/api/v1/groups/{id}/members", as(owner, { userIds: ["nobody"] }), `/api/v1/groups/${group.id}/members`);
     await call("PUT", "/api/v1/groups/{id}/members", as(owner, { userIds: [] }), "/api/v1/groups/missing/members");
     await call("GET", "/api/v1/people", as(owner));
+    await call("PATCH", "/api/v1/groups/{id}", as(owner, { mfa: "always" }), `/api/v1/groups/${group.id}`);
+    await call("GET", "/api/v1/overview", as(owner));
+    await call("GET", "/api/v1/overview", {});
+    await call("GET", "/api/v1/audit", as(owner), "/api/v1/audit?type=group-added&limit=5");
+    await call("GET", "/api/v1/audit", as(owner), "/api/v1/audit?limit=5000");
 
     const created = (await call("POST", "/api/v1/applications", as(owner, { name: "VPN", template: "openasy-vpn", url: "https://vpn.example.com", groups: ["Engineering"] }))).body as { application: { id: string } };
     await call("POST", "/api/v1/applications", as(owner, { name: "Bad", redirectUris: ["ftp://x"] }));

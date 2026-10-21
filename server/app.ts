@@ -4,6 +4,7 @@ import { extname, join, normalize } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { AuthError, mergeOpenApi, sendProblem, type Auth, type Role } from "@openasy/auth";
 import { log } from "./log.ts";
+import type { Audit } from "./audit.ts";
 import type { Directory } from "./directory.ts";
 import { countRequest, renderMetrics } from "./metrics.ts";
 import type { Oidc } from "./oidc.ts";
@@ -15,6 +16,7 @@ export interface AppOptions {
   auth: Auth;
   directory: Directory;
   oidc: Oidc;
+  audit: Audit;
   /** Built web UI; omit to run headless (ADR 0018). */
   webDir?: string;
   /** Built API reference (Swagger UI), served at /api/docs. */
@@ -112,6 +114,8 @@ interface Ctx {
   res: ServerResponse;
   params: string[];
   body: () => Promise<Record<string, unknown>>;
+  /** Writes to the audit log as whoever made the request. */
+  record: (type: string, target: string, detail?: string) => void;
 }
 interface Route {
   method: string;
@@ -123,7 +127,7 @@ interface Route {
   handle: (ctx: Ctx) => unknown;
 }
 
-export function createApp({ db, version, auth, directory, oidc, webDir, docsDir, openapi }: AppOptions) {
+export function createApp({ db, version, auth, directory, oidc, audit, webDir, docsDir, openapi }: AppOptions) {
   // The served description includes /api/v1/auth from @openasy/auth, so the API reference documents sign-in too.
   const spec = openapi && JSON.stringify({ ...mergeOpenApi(openapi), info: { ...(openapi.info as object), version } });
 
@@ -135,27 +139,136 @@ export function createApp({ db, version, auth, directory, oidc, webDir, docsDir,
 
     // Applications people sign in to (OpenID Connect clients). Admins change them: they decide who gets in.
     { method: "GET", path: "/api/v1/applications", auth: "viewer", handle: () => ({ applications: directory.listApplications(), issuer: oidc.provider.issuer }) },
-    { method: "POST", path: "/api/v1/applications", auth: "admin", handle: async ({ res, body }) => created(res, directory.createApplication(await body())) },
+    {
+      method: "POST",
+      path: "/api/v1/applications",
+      auth: "admin",
+      handle: async ({ res, body, record }) => {
+        const c = directory.createApplication(await body());
+        record("application-added", c.application.id, c.application.name);
+        return created(res, c);
+      },
+    },
     { method: "GET", path: "/api/v1/applications/:id", auth: "viewer", handle: ({ params }) => directory.application(params[0]!) },
-    { method: "PATCH", path: "/api/v1/applications/:id", auth: "admin", handle: async ({ params, body }) => directory.updateApplication(params[0]!, await body()) },
-    { method: "DELETE", path: "/api/v1/applications/:id", auth: "admin", handle: ({ res, params }) => (directory.deleteApplication(params[0]!), noContent(res)) },
-    { method: "POST", path: "/api/v1/applications/:id/secret", auth: "admin", handle: ({ params }) => directory.newSecret(params[0]!) },
+    {
+      method: "PATCH",
+      path: "/api/v1/applications/:id",
+      auth: "admin",
+      handle: async ({ params, body, record }) => {
+        const a = directory.updateApplication(params[0]!, await body());
+        record("application-updated", a.id, a.name);
+        return a;
+      },
+    },
+    {
+      method: "DELETE",
+      path: "/api/v1/applications/:id",
+      auth: "admin",
+      handle: ({ res, params, record }) => {
+        const a = directory.application(params[0]!);
+        directory.deleteApplication(a.id);
+        record("application-removed", a.id, a.name);
+        return noContent(res);
+      },
+    },
+    {
+      method: "POST",
+      path: "/api/v1/applications/:id/secret",
+      auth: "admin",
+      handle: ({ params, record }) => {
+        const c = directory.newSecret(params[0]!);
+        record("application-secret-replaced", c.application.id, c.application.name);
+        return c;
+      },
+    },
 
     // Groups and the people in them. Editors change them.
     { method: "GET", path: "/api/v1/groups", auth: "viewer", handle: () => ({ groups: directory.listGroups() }) },
-    { method: "POST", path: "/api/v1/groups", auth: "editor", handle: async ({ res, body }) => created(res, directory.createGroup(await body())) },
-    { method: "PATCH", path: "/api/v1/groups/:id", auth: "editor", handle: async ({ params, body }) => directory.updateGroup(params[0]!, await body()) },
-    { method: "DELETE", path: "/api/v1/groups/:id", auth: "editor", handle: ({ res, params }) => (directory.deleteGroup(params[0]!), noContent(res)) },
-    { method: "PUT", path: "/api/v1/groups/:id/members", auth: "editor", handle: async ({ params, body }) => directory.setMembers(params[0]!, (await body()).userIds) },
+    {
+      method: "POST",
+      path: "/api/v1/groups",
+      auth: "editor",
+      handle: async ({ res, body, record }) => {
+        const g = directory.createGroup(await body());
+        record("group-added", g.id, g.name);
+        return created(res, g);
+      },
+    },
+    {
+      method: "PATCH",
+      path: "/api/v1/groups/:id",
+      auth: "editor",
+      handle: async ({ params, body, record }) => {
+        const g = directory.updateGroup(params[0]!, await body());
+        record("group-updated", g.id, `${g.name}, second factor ${g.mfa}${g.syncedFrom ? `, members from ${g.syncedFrom}` : ""}`);
+        return g;
+      },
+    },
+    {
+      method: "DELETE",
+      path: "/api/v1/groups/:id",
+      auth: "editor",
+      handle: ({ res, params, record }) => {
+        const g = directory.group(params[0]!);
+        directory.deleteGroup(g.id);
+        record("group-removed", g.id, g.name);
+        return noContent(res);
+      },
+    },
+    {
+      method: "PUT",
+      path: "/api/v1/groups/:id/members",
+      auth: "editor",
+      handle: async ({ params, body, record }) => {
+        const g = directory.setMembers(params[0]!, (await body()).userIds);
+        record("group-members-changed", g.id, `${g.name}: ${g.members} ${g.members === 1 ? "member" : "members"}`);
+        return g;
+      },
+    },
 
     // The directory: everyone who can sign in, with their groups.
     { method: "GET", path: "/api/v1/people", auth: "viewer", handle: () => ({ people: directory.listPeople() }) },
+
+    // What happened: sign-ins, refusals and changes, newest first (ADR 0013).
+    {
+      method: "GET",
+      path: "/api/v1/audit",
+      auth: "viewer",
+      handle: ({ req }) => {
+        const q = new URL(req.url ?? "/", "http://localhost").searchParams;
+        const limit = Number(q.get("limit") ?? 200);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new HttpProblem(422, "invalid-body", "limit is a whole number from 1 to 1000.");
+        return { events: audit.list({ limit, type: q.get("type") ?? undefined }) };
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/v1/overview",
+      auth: "viewer",
+      handle: () => {
+        const day = new Date(Date.now() - 86_400_000).toISOString();
+        const people = directory.listPeople();
+        return {
+          people: people.length,
+          applications: directory.listApplications().length,
+          groups: directory.listGroups().length,
+          appSignIns24h: audit.count("app-sign-in", day),
+          refused24h: audit.count("app-sign-in-refused", day),
+          failedSignIns24h: audit.count("sign-in-failed", day),
+          // People who sign in with a password alone: no second factor, and no identity provider to ask for one.
+          withoutSecondFactor: people.filter((p) => p.status === "active" && !p.secondFactor && p.providers.length === 0).map((p) => ({ id: p.id, name: p.name, email: p.email })),
+        };
+      },
+    },
   ];
 
   const compiled = routes.map((r) => ({ ...r, re: new RegExp(`^${r.path.replace(/:[a-z]+/g, "([^/]+)")}$`) }));
 
-  function authorize(req: IncomingMessage, access: Access) {
-    if (access !== "none") auth.authorize(req, access);
+  /** Who is asking, for the audit log; undefined for routes anyone may call. */
+  function authorize(req: IncomingMessage, access: Access): string | undefined {
+    if (access === "none") return undefined;
+    const p = auth.authorize(req, access);
+    return p.kind === "session" ? p.user.id : `token:${p.tokenId}`;
   }
 
   async function route(req: IncomingMessage, res: ServerResponse): Promise<string> {
@@ -196,9 +309,10 @@ export function createApp({ db, version, auth, directory, oidc, webDir, docsDir,
       const m = path.match(r.re);
       if (!m || r.method !== req.method) continue;
       try {
-        authorize(req, r.auth);
+        const actor = authorize(req, r.auth);
         const params = m.slice(1).map(decodeURIComponent);
-        const result = await r.handle({ req, res, params, body: () => readJson(req, r.bodyLimit) });
+        const record = (type: string, target: string, detail?: string) => audit.record({ type, actor, target, detail, ip: req.socket.remoteAddress });
+        const result = await r.handle({ req, res, params, record, body: () => readJson(req, r.bodyLimit) });
         if (!res.headersSent && result !== undefined) json(res, 200, result);
       } catch (err) {
         if (err instanceof AuthError) sendProblem(res, err);

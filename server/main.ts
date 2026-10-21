@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createAuth, oidcFromEnv, readSecretsKey } from "@openasy/auth";
 import { createApp } from "./app.ts";
+import { createAudit } from "./audit.ts";
 import { openDb } from "./db.ts";
 import { createDirectory } from "./directory.ts";
 import { createKeyring } from "./kek.ts";
@@ -33,6 +34,7 @@ if (!kek) {
 
 const db = openDb(dbPath);
 const directory = createDirectory(db, createKeyring(kek));
+const audit = createAudit(db);
 // The address people open Identity at, behind the TLS proxy (ADR 0026). It is also the OpenID issuer, so it must not
 // change once applications use it.
 const publicUrl = (process.env.IDENTITY_PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/$/, "");
@@ -49,10 +51,10 @@ const auth = createAuth({
   // Groups that follow an identity provider's group get their members at each sign-in.
   onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups),
   secretsKey: kek,
-  // Audit log (ADR 0013): every sign-in, failure and change to members and tokens.
-  onEvent: (event) => log(event.type === "sign-in-failed" || event.type === "session-ended" ? "warn" : "info", "auth", { event }),
+  // Audit log (ADR 0013): every sign-in, failure and change to members, tokens and providers.
+  onEvent: (event) => audit.record(event),
 });
-const oidc = createOidc({ db, keyring: createKeyring(kek), directory, auth, issuer: publicUrl });
+const oidc = createOidc({ db, keyring: createKeyring(kek), directory, auth, audit, issuer: publicUrl });
 const server = createServer(
   createApp({
     db,
@@ -60,6 +62,7 @@ const server = createServer(
     auth,
     directory,
     oidc,
+    audit,
     webDir: !headless && existsSync(webDir) ? webDir : undefined,
     docsDir: existsSync(docsDir) ? docsDir : undefined,
     openapi,
@@ -73,7 +76,7 @@ if (!publicUrl.startsWith("https://") && !/^http:\/\/(localhost|127\.0\.0\.1)(:|
 const setup = auth.setupLink();
 // No default password (ADR 0013): the first person to open this link becomes the owner.
 if (setup) log("info", "no owner yet: open this link once to create the owner account", { url: setup });
-const purge = setInterval(() => (auth.purge(), oidc.purge()), 5 * 60_000);
+const purge = setInterval(() => (auth.purge(), oidc.purge(), audit.purge()), 5 * 60_000);
 
 function shutdown(signal: string) {
   log("info", "shutting down", { signal });

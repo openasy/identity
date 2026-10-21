@@ -695,6 +695,111 @@
         "description": "Invite, disable and remove people under /api/v1/auth/members; give them the user role to sign in to applications only.\n\nNeeds the viewer role."
       }
     },
+    "/api/v1/audit": {
+      "get": {
+        "operationId": "listAudit",
+        "tags": [
+          "Directory"
+        ],
+        "summary": "The audit log",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Only this kind of event.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "1 to 1000, default 200.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first; kept 400 days.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer",
+        "description": "Sign-ins to Identity and to applications, refusals, and changes, with who made them.\n\nNeeds the viewer role."
+      }
+    },
+    "/api/v1/overview": {
+      "get": {
+        "operationId": "getOverview",
+        "tags": [
+          "Directory"
+        ],
+        "summary": "The overview",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Counts and the last day.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role."
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "liveness",
@@ -1069,6 +1174,7 @@
           "name",
           "description",
           "syncedFrom",
+          "mfa",
           "members",
           "createdAt"
         ],
@@ -1095,6 +1201,14 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "mfa": {
+            "type": "string",
+            "enum": [
+              "optional",
+              "required"
+            ],
+            "description": "required: members sign in to applications with a second factor, a passkey or an identity provider."
           }
         }
       },
@@ -1129,6 +1243,14 @@
               "string",
               "null"
             ]
+          },
+          "mfa": {
+            "type": "string",
+            "enum": [
+              "optional",
+              "required"
+            ],
+            "description": "required: members sign in to applications with a second factor, a passkey or an identity provider."
           }
         }
       },
@@ -1146,6 +1268,14 @@
               "string",
               "null"
             ]
+          },
+          "mfa": {
+            "type": "string",
+            "enum": [
+              "optional",
+              "required"
+            ],
+            "description": "required: members sign in to applications with a second factor, a passkey or an identity provider."
           }
         }
       },
@@ -1171,7 +1301,9 @@
           "name",
           "role",
           "status",
-          "groups"
+          "groups",
+          "secondFactor",
+          "providers"
         ],
         "properties": {
           "id": {
@@ -1200,6 +1332,17 @@
             "items": {
               "type": "string"
             }
+          },
+          "secondFactor": {
+            "type": "boolean",
+            "description": "Has an authenticator app or a passkey."
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Identity providers they sign in through."
           }
         }
       },
@@ -1214,6 +1357,134 @@
             "items": {
               "$ref": "#/components/schemas/Person"
             }
+          }
+        }
+      },
+      "AuditEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "type",
+          "actorName",
+          "applicationName"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "type": {
+            "type": "string",
+            "description": "app-sign-in, app-sign-in-refused, sign-in, sign-in-failed, application-added, group-members-changed, member-invited and the other events of @openasy/auth.",
+            "examples": [
+              "app-sign-in"
+            ]
+          },
+          "actor": {
+            "type": "string"
+          },
+          "actorName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target": {
+            "type": "string"
+          },
+          "application": {
+            "type": "string"
+          },
+          "applicationName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "method": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "AuditList": {
+        "type": "object",
+        "required": [
+          "events"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvent"
+            }
+          }
+        }
+      },
+      "Overview": {
+        "type": "object",
+        "required": [
+          "people",
+          "applications",
+          "groups",
+          "appSignIns24h",
+          "refused24h",
+          "failedSignIns24h",
+          "withoutSecondFactor"
+        ],
+        "properties": {
+          "people": {
+            "type": "integer"
+          },
+          "applications": {
+            "type": "integer"
+          },
+          "groups": {
+            "type": "integer"
+          },
+          "appSignIns24h": {
+            "type": "integer",
+            "description": "Sign-ins to applications in the last 24 hours, counted when the application exchanged its code."
+          },
+          "refused24h": {
+            "type": "integer",
+            "description": "Sign-ins to applications refused in the last 24 hours."
+          },
+          "failedSignIns24h": {
+            "type": "integer",
+            "description": "Failed sign-ins to Identity in the last 24 hours."
+          },
+          "withoutSecondFactor": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name",
+                "email"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Active people who sign in with a password alone."
           }
         }
       }

@@ -6,9 +6,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import type { Auth } from "@openasy/auth";
 import { Provider, errors, interactionPolicy, type Adapter, type AdapterPayload, type KoaContextWithOIDC } from "oidc-provider";
+import type { Audit } from "./audit.ts";
 import type { Directory } from "./directory.ts";
 import type { Keyring } from "./kek.ts";
 import { log } from "./log.ts";
+
+/** The address a request came from, as the access log has it. */
+const clientIpOf = (req: IncomingMessage) => req.socket.remoteAddress ?? undefined;
 
 /** Paths the provider answers, besides discovery at /.well-known/openid-configuration. */
 export const OIDC_PREFIX = "/oidc";
@@ -92,31 +96,40 @@ export interface OidcOptions {
   keyring: Keyring;
   directory: Directory;
   auth: Auth;
+  audit: Audit;
   /** Identity's public address; the issuer applications trust. */
   issuer: string;
 }
 
-export function createOidc({ db, keyring, directory, auth, issuer }: OidcOptions) {
+export function createOidc({ db, keyring, directory, auth, audit, issuer }: OidcOptions) {
   const { keys, cookieKey } = signingKeys(db, keyring);
 
-  /** Who is signed in to Identity in this browser, if anyone. */
-  const signedIn = (req: IncomingMessage): string | undefined => {
+  /**
+   * Who is signed in to Identity in this browser, if anyone, and whether that session is strong: opened with a second
+   * factor or a passkey, or through an identity provider, which handles its own (ADR 0002).
+   */
+  const signedIn = (req: IncomingMessage): { id: string; strong: boolean } | undefined => {
     try {
       const p = auth.authorize(req, "user");
-      return p.kind === "session" ? p.user.id : undefined;
+      return p.kind === "session" ? { id: p.user.id, strong: p.mfa || p.method === "passkey" || p.method.startsWith("oidc:") } : undefined;
     } catch {
       return undefined;
     }
   };
+  /** Someone's groups ask for a second factor and this session was opened without one. */
+  const needsSecondFactor = (s: { id: string; strong: boolean }) => !s.strong && directory.mfaRequired(s.id);
 
-  // Identity's sign-in is the session: the provider asks again when it no longer matches.
+  // Identity's sign-in is the session: the provider asks again when it no longer matches, or when someone's groups
+  // now ask for a second factor their session does not have.
   const policy = interactionPolicy.base();
   policy.get("login")!.checks.add(
     new interactionPolicy.Check("identity_session", "Sign in to Identity", (ctx) => {
       const accountId = ctx.oidc.session?.accountId;
-      return !accountId || signedIn(ctx.req) !== accountId ? interactionPolicy.Check.REQUEST_PROMPT : interactionPolicy.Check.NO_NEED_TO_PROMPT;
+      const s = signedIn(ctx.req);
+      return !accountId || s?.id !== accountId || needsSecondFactor(s) ? interactionPolicy.Check.REQUEST_PROMPT : interactionPolicy.Check.NO_NEED_TO_PROMPT;
     }),
   );
+  const refused = (application: string, actor: string, detail: string, ip?: string) => audit.record({ type: "app-sign-in-refused", application, actor, detail, ip });
 
   const provider = new Provider(issuer, {
     adapter: (name: string) => (name === "Client" ? new ClientAdapter(db, directory) : new SqliteAdapter(name, db)),
@@ -157,7 +170,10 @@ export function createOidc({ db, keyring, directory, auth, issuer }: OidcOptions
       const { client, session } = ctx.oidc;
       const accountId = session?.accountId;
       if (!client || !accountId) return undefined;
-      if (!directory.mayUse(client.clientId, accountId)) throw new errors.AccessDenied(`You may not use ${client.clientName ?? "this application"}. Ask an admin to add you to one of its groups.`);
+      if (!directory.mayUse(client.clientId, accountId)) {
+        refused(client.clientId, accountId, "not in its groups", ctx.ip);
+        throw new errors.AccessDenied(`You may not use ${client.clientName ?? "this application"}. Ask an admin to add you to one of its groups.`);
+      }
       const grantId = ctx.oidc.result?.consent?.grantId ?? session.grantIdFor(client.clientId);
       if (grantId) {
         const existing = await ctx.oidc.provider.Grant.find(grantId);
@@ -179,7 +195,10 @@ export function createOidc({ db, keyring, directory, auth, issuer }: OidcOptions
   // Behind the TLS proxy (ADR 0026), the provider reads the scheme and host from X-Forwarded-* headers.
   provider.proxy = issuer.startsWith("https://");
   provider.on("server_error", (_ctx, err) => log("error", "openid provider", { error: String(err) }));
-  provider.on("grant.success", (ctx) => log("info", "openid sign-in", { client: ctx.oidc.client?.clientId, account: ctx.oidc.session?.accountId }));
+  // A code exchanged for tokens: someone signed in to an application.
+  provider.on("grant.success", (ctx) => {
+    if (ctx.oidc.params?.grant_type === "authorization_code") audit.record({ type: "app-sign-in", application: ctx.oidc.client?.clientId, actor: ctx.oidc.entities.AuthorizationCode?.accountId, ip: ctx.ip });
+  });
 
   const handler = provider.callback();
 
@@ -193,17 +212,25 @@ export function createOidc({ db, keyring, directory, auth, issuer }: OidcOptions
       res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }).end("This sign-in expired. Go back to the application and start again.");
       return;
     }
-    const accountId = signedIn(req);
-    if (!accountId) {
-      res.writeHead(303, { location: `/?return=${encodeURIComponent(`/interaction/${uid}`)}` }).end();
+    const back = encodeURIComponent(`/interaction/${uid}`);
+    const s = signedIn(req);
+    if (!s) {
+      res.writeHead(303, { location: `/?return=${back}` }).end();
       return;
     }
     const clientId = String(details.params.client_id);
-    if (!directory.mayUse(clientId, accountId)) {
+    if (!directory.mayUse(clientId, s.id)) {
+      refused(clientId, s.id, "not in its groups", clientIpOf(req));
       await provider.interactionFinished(req, res, { error: "access_denied", error_description: "You may not use this application. Ask an admin to add you to one of its groups." }, { mergeWithLastSubmission: false });
       return;
     }
-    await provider.interactionFinished(req, res, { login: { accountId } }, { mergeWithLastSubmission: false });
+    // Their groups ask for a second factor: they add one, or sign in again with it, and come back here.
+    if (needsSecondFactor(s)) {
+      refused(clientId, s.id, "second factor needed", clientIpOf(req));
+      res.writeHead(303, { location: `/?return=${back}&mfa=required` }).end();
+      return;
+    }
+    await provider.interactionFinished(req, res, { login: { accountId: s.id } }, { mergeWithLastSubmission: false });
   }
 
   return {

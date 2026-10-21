@@ -4,6 +4,7 @@ import { createServer, type RequestListener, type Server } from "node:http";
 import { createAuth } from "@openasy/auth";
 import type { AddressInfo } from "node:net";
 import { createApp, type AppOptions } from "./app.ts";
+import { createAudit } from "./audit.ts";
 import { openDb } from "./db.ts";
 import { createDirectory } from "./directory.ts";
 import { createKeyring } from "./kek.ts";
@@ -20,11 +21,12 @@ export async function startApp(opts: Partial<AppOptions> & { version: string }) 
   const base = `http://localhost:${(server.address() as AddressInfo).port}`;
   const keyring = createKeyring(KEK);
   const directory = createDirectory(db, keyring);
-  const auth = createAuth({ db, product: "identity", productName: "OpenAsy Identity", origin: base, secretsKey: KEK, users: true, onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups) });
-  const oidc = createOidc({ db, keyring, directory, auth, issuer: base });
-  handler = createApp({ db, auth, directory, oidc, ...opts });
+  const audit = createAudit(db);
+  const auth = createAuth({ db, product: "identity", productName: "OpenAsy Identity", origin: base, secretsKey: KEK, users: true, onEvent: (e) => audit.record(e), onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups) });
+  const oidc = createOidc({ db, keyring, directory, auth, audit, issuer: base });
+  handler = createApp({ db, auth, directory, oidc, audit, ...opts });
   const close = () => new Promise<void>((resolve) => server.close(() => resolve()));
-  return { db, auth, directory, oidc, base, close };
+  return { db, auth, directory, oidc, audit, base, close };
 }
 
 export const UA = "Mozilla/5.0 (Macintosh) Chrome/141.0";

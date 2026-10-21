@@ -4,8 +4,8 @@ The [OpenAsy](https://github.com/openasy) Identity product: single sign-on with 
 OpenAsy products and any other application. One container with its API and web UI, one version, its data in one
 SQLite file (ADR 0018, 0033).
 
-> **Not released yet.** MFA policies per group, the audit page and the overview come before the first release; see
-> [ADR 0033](https://github.com/openasy/openasy.github.io/blob/main/docs/decisions/0033-identity.md).
+> **Not released yet.** See [ADR 0033](https://github.com/openasy/openasy.github.io/blob/main/docs/decisions/0033-identity.md)
+> for what comes later: SAML 2.0, LDAP and Active Directory, SCIM, and passkey-only groups.
 
 - **OpenID provider** on [oidc-provider](https://github.com/panva/node-oidc-provider), OpenID Certified: discovery,
   authorization code with PKCE for every application, refresh tokens, userinfo and RP-initiated logout. The ID token
@@ -16,6 +16,10 @@ SQLite file (ADR 0018, 0033).
 - **Applications:** OpenAsy VPN, Infrastructure and Vulnerabilities from a template that fills in their callback
   addresses and shows what to enter there, or any OpenID Connect application by its redirect URIs. Each is open to
   everyone or to chosen groups; the client secret is shown once.
+- **A second factor per group:** where a group requires one, its members sign in to applications with an
+  authenticator app, a passkey or an identity provider. People without one are asked to add it and then continue.
+- **Audit log:** sign-ins to Identity and to applications, refusals, and every change with who made it, kept 400 days
+  on the Audit page and written to the JSON log as it happens.
 - **People and groups:** invite people to sign in to applications only (the User role), and group them by hand or let
   a group follow a group at an identity provider, refreshed at each sign-in.
 
@@ -73,6 +77,7 @@ User for people nobody invited; they join the directory at their first sign-in. 
 | `GET /api/v1/version` | Product and version |
 | `/.well-known/openid-configuration`, `/oidc/*` | The OpenID provider: the issuer is `IDENTITY_PUBLIC_URL` |
 | `/api/v1/applications`, `/api/v1/groups`, `/api/v1/people` | Applications, groups and the directory |
+| `/api/v1/audit`, `/api/v1/overview` | The audit log, and the counts on the overview |
 | `/api/docs/` | Interactive API reference (Swagger UI), bundled in the image |
 | `/api/openapi.json` | OpenAPI 3.1 description |
 
