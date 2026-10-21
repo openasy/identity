@@ -4,7 +4,7 @@
     "title": "OpenAsy Identity API",
     "version": "0.1.0",
     "summary": "Single sign-on for OpenAsy products and any other application.",
-    "description": "Every screen of Identity uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nThe OpenID provider is at `/.well-known/openid-configuration` and `/oidc/*` (ADR 0033); applications sign people in there. The operations below take the session of a signed-in person or an API token, and each names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003).\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
+    "description": "Every screen of Identity uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nThe OpenID provider is at `/.well-known/openid-configuration` and `/oidc/*` (ADR 0033); applications sign people in there. Identity providers provision people and groups with SCIM 2.0 at `/scim/v2`, with the token from `/api/v1/provisioning`. The operations below take the session of a signed-in person or an API token, and each names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003).\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
     "license": {
       "name": "AGPL-3.0-only",
       "identifier": "AGPL-3.0-only"
@@ -693,6 +693,117 @@
         },
         "x-openasy-role": "viewer",
         "description": "Invite, disable and remove people under /api/v1/auth/members; give them the user role to sign in to applications only.\n\nNeeds the viewer role."
+      }
+    },
+    "/api/v1/provisioning": {
+      "get": {
+        "operationId": "getProvisioning",
+        "tags": [
+          "Directory"
+        ],
+        "summary": "SCIM provisioning",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SCIM's address and token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Provisioning"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin",
+        "description": "Okta, Microsoft Entra ID and other providers create, change and remove people with the user role and groups at `/scim/v2` (RFC 7644). People who manage Identity are never changed by it.\n\nNeeds the admin role."
+      }
+    },
+    "/api/v1/provisioning/token": {
+      "post": {
+        "operationId": "newProvisioningToken",
+        "tags": [
+          "Directory"
+        ],
+        "summary": "New SCIM token",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SCIM's address and token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Provisioning"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin",
+        "description": "The old token stops working at once; the new one is shown once.\n\nNeeds the admin role."
+      },
+      "delete": {
+        "operationId": "removeProvisioningToken",
+        "tags": [
+          "Directory"
+        ],
+        "summary": "Turn SCIM off",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No token: SCIM refuses every request."
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin",
+        "description": "Needs the admin role."
       }
     },
     "/api/v1/audit": {
@@ -1488,6 +1599,39 @@
               }
             },
             "description": "Active people who sign in with a password alone."
+          }
+        }
+      },
+      "Provisioning": {
+        "type": "object",
+        "required": [
+          "url",
+          "tokenCreatedAt",
+          "lastUsedAt"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The SCIM 2.0 base URL to give the identity provider."
+          },
+          "tokenCreatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "null: no token, so SCIM is off."
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "token": {
+            "type": "string",
+            "description": "Only when made: the bearer token for the provider, shown once."
           }
         }
       }

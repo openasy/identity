@@ -8,6 +8,7 @@ import { createDirectory } from "./directory.ts";
 import { createKeyring } from "./kek.ts";
 import { log } from "./log.ts";
 import { createOidc } from "./oidc.ts";
+import { createScim } from "./scim.ts";
 
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
 const port = Number(process.env.PORT ?? 8080);
@@ -63,6 +64,7 @@ const server = createServer(
     directory,
     oidc,
     audit,
+    scim: createScim({ db, audit, base: publicUrl }),
     webDir: !headless && existsSync(webDir) ? webDir : undefined,
     docsDir: existsSync(docsDir) ? docsDir : undefined,
     openapi,

@@ -112,6 +112,9 @@ describe("responses match openapi.json", () => {
     await call("GET", "/api/v1/people", as(owner));
     await call("PATCH", "/api/v1/groups/{id}", as(owner, { mfa: "always" }), `/api/v1/groups/${group.id}`);
     await call("GET", "/api/v1/overview", as(owner));
+    await call("GET", "/api/v1/provisioning", as(owner));
+    await call("POST", "/api/v1/provisioning/token", as(owner, {}));
+    await call("DELETE", "/api/v1/provisioning/token", as(owner, undefined, "DELETE"));
     await call("GET", "/api/v1/overview", {});
     await call("GET", "/api/v1/audit", as(owner), "/api/v1/audit?type=group-added&limit=5");
     await call("GET", "/api/v1/audit", as(owner), "/api/v1/audit?limit=5000");

@@ -8,6 +8,7 @@ import type { Audit } from "./audit.ts";
 import type { Directory } from "./directory.ts";
 import { countRequest, renderMetrics } from "./metrics.ts";
 import type { Oidc } from "./oidc.ts";
+import type { Scim } from "./scim.ts";
 
 export interface AppOptions {
   db: DatabaseSync;
@@ -17,6 +18,7 @@ export interface AppOptions {
   directory: Directory;
   oidc: Oidc;
   audit: Audit;
+  scim: Scim;
   /** Built web UI; omit to run headless (ADR 0018). */
   webDir?: string;
   /** Built API reference (Swagger UI), served at /api/docs. */
@@ -127,7 +129,7 @@ interface Route {
   handle: (ctx: Ctx) => unknown;
 }
 
-export function createApp({ db, version, auth, directory, oidc, audit, webDir, docsDir, openapi }: AppOptions) {
+export function createApp({ db, version, auth, directory, oidc, audit, scim, webDir, docsDir, openapi }: AppOptions) {
   // The served description includes /api/v1/auth from @openasy/auth, so the API reference documents sign-in too.
   const spec = openapi && JSON.stringify({ ...mergeOpenApi(openapi), info: { ...(openapi.info as object), version } });
 
@@ -229,6 +231,29 @@ export function createApp({ db, version, auth, directory, oidc, audit, webDir, d
     // The directory: everyone who can sign in, with their groups.
     { method: "GET", path: "/api/v1/people", auth: "viewer", handle: () => ({ people: directory.listPeople() }) },
 
+    // Provisioning: the SCIM endpoint an identity provider sends people and groups to, and its token (ADR 0034).
+    { method: "GET", path: "/api/v1/provisioning", auth: "admin", handle: () => scim.status() },
+    {
+      method: "POST",
+      path: "/api/v1/provisioning/token",
+      auth: "admin",
+      handle: ({ record }) => {
+        const token = scim.newToken();
+        record("scim-token-created", "scim");
+        return { ...scim.status(), token };
+      },
+    },
+    {
+      method: "DELETE",
+      path: "/api/v1/provisioning/token",
+      auth: "admin",
+      handle: ({ res, record }) => {
+        scim.removeToken();
+        record("scim-token-removed", "scim");
+        return noContent(res);
+      },
+    },
+
     // What happened: sign-ins, refusals and changes, newest first (ADR 0013).
     {
       method: "GET",
@@ -302,6 +327,8 @@ export function createApp({ db, version, auth, directory, oidc, audit, webDir, d
     }
 
     if (await oidc.handle(req, res, path)) return path.startsWith("/interaction/") ? "/interaction/:uid" : "/oidc";
+
+    if (await scim.handle(req, res, path)) return "/scim/v2";
 
     if (await auth.handle(req, res)) return auth.routeName(req) ?? "/api/v1/auth/*";
 

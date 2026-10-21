@@ -72,6 +72,15 @@ const MIGRATIONS = [
    ALTER TABLE groups ADD COLUMN mfa TEXT NOT NULL DEFAULT 'optional' CHECK (mfa IN ('optional', 'required', 'passkey'));
    UPDATE groups SET mfa = mfa_old;
    ALTER TABLE groups DROP COLUMN mfa_old;`,
+  // 0.1.0: SCIM (ADR 0034). People and groups an identity provider sends: their ids there, and which are its.
+  `CREATE TABLE scim_users (
+     user_id TEXT PRIMARY KEY,
+     user_name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+     external_id TEXT,
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL
+   );
+   ALTER TABLE groups ADD COLUMN external_id TEXT;`,
 ];
 
 /** Opens the product's single SQLite file in WAL mode (ADR 0011) and migrates it forward. */

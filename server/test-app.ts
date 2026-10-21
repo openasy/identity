@@ -9,6 +9,7 @@ import { openDb } from "./db.ts";
 import { createDirectory } from "./directory.ts";
 import { createKeyring } from "./kek.ts";
 import { createOidc } from "./oidc.ts";
+import { createScim } from "./scim.ts";
 
 export const KEK = Buffer.alloc(32, 7);
 
@@ -24,9 +25,10 @@ export async function startApp(opts: Partial<AppOptions> & { version: string }) 
   const audit = createAudit(db);
   const auth = createAuth({ db, product: "identity", productName: "OpenAsy Identity", origin: base, secretsKey: KEK, users: true, onEvent: (e) => audit.record(e), onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups) });
   const oidc = createOidc({ db, keyring, directory, auth, audit, issuer: base });
-  handler = createApp({ db, auth, directory, oidc, audit, ...opts });
+  const scim = createScim({ db, audit, base });
+  handler = createApp({ db, auth, directory, oidc, audit, scim, ...opts });
   const close = () => new Promise<void>((resolve) => server.close(() => resolve()));
-  return { db, auth, directory, oidc, audit, base, close };
+  return { db, auth, directory, oidc, audit, scim, base, close };
 }
 
 export const UA = "Mozilla/5.0 (Macintosh) Chrome/141.0";
