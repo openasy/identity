@@ -1,9 +1,9 @@
 import { AppShell, BrandProvider, Button, EmptyState, PageHeader } from "@openasy/ui";
-import { AccountSettings, AuthGate, MembersSettings, TokensSettings, useAuth } from "@openasy/auth/react";
-import { KeyRound, LayoutDashboard, LogOut, UserRound, Users } from "lucide-react";
+import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAuth } from "@openasy/auth/react";
+import { KeyRound, LayoutDashboard, LogIn, LogOut, UserRound, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const PAGES = ["overview", "account", "members", "tokens"] as const;
+const PAGES = ["overview", "account", "members", "signin", "tokens"] as const;
 type Page = (typeof PAGES)[number];
 
 function parsePage(hash: string): Page {
@@ -14,6 +14,7 @@ function parsePage(hash: string): Page {
 const SETTINGS = {
   account: ["Account", "Your profile, password, two-step verification and where you are signed in."],
   members: ["Members", "Who can manage this Identity, and with which role. Viewers see everything; editors also change users and groups; admins also manage applications, providers, members and tokens."],
+  signin: ["Sign-in", "Identity providers the people who manage Identity can sign in with, and which groups give which role."],
   tokens: ["API tokens", "For scripts. Each token has one role and an expiry; the secret is shown once."],
 } as const;
 
@@ -31,6 +32,7 @@ function Product() {
     ...(can("admin")
       ? [
           { id: "members", label: "Members", icon: Users },
+          { id: "signin", label: "Sign-in", icon: LogIn },
           { id: "tokens", label: "API tokens", icon: KeyRound },
         ]
       : []),
@@ -67,7 +69,7 @@ function Product() {
               )
             }
           />
-          {page === "account" ? <AccountSettings /> : page === "members" ? <MembersSettings /> : <TokensSettings />}
+          {page === "account" ? <AccountSettings /> : page === "members" ? <MembersSettings /> : page === "signin" ? <SignInSettings /> : <TokensSettings />}
         </>
       )}
     </AppShell>

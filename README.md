@@ -29,7 +29,7 @@ are on http://localhost:8080; the API reference is at http://localhost:8080/api/
 | `IDENTITY_PUBLIC_URL` | `http://localhost:8080` | The address people and applications open, with `https://` behind your TLS proxy. It is the OpenID issuer: keep it fixed once applications use it |
 | `IDENTITY_SECRETS_KEY_FILE` | `/run/secrets/openasy-kek` | 32-byte key-encryption key; required |
 | `IDENTITY_PASSWORD_SIGN_IN` | `true` | `false` when the people who manage Identity sign in through another provider |
-| `IDENTITY_OIDC_*` | | Sign in to Identity itself through another provider, as in every OpenAsy product |
+| `IDENTITY_OIDC_*` | | Sign in to Identity itself through another provider, as in every OpenAsy product; owners can also add providers under Settings, Sign-in |
 | `IDENTITY_HEADLESS` | `false` | `true` serves only the API |
 
 ## Sign-in
