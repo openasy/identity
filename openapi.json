@@ -1,0 +1,241 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "OpenAsy Identity API",
+    "version": "0.1.0",
+    "summary": "Single sign-on for OpenAsy products and any other application.",
+    "description": "Every screen of Identity uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nOperations take the session of a signed-in person or an API token, and each names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003).\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
+    "license": {
+      "name": "AGPL-3.0-only",
+      "identifier": "AGPL-3.0-only"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This Identity"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Product",
+      "description": "Version and health of this VPN."
+    }
+  ],
+  "paths": {
+    "/api/v1/version": {
+      "get": {
+        "operationId": "getVersion",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Product and version",
+        "responses": {
+          "200": {
+            "description": "The running product and its version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "liveness",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Liveness",
+        "responses": {
+          "200": {
+            "description": "The process is running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readiness",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Readiness",
+        "responses": {
+          "200": {
+            "description": "Ready to serve.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The database is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "metrics",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Prometheus metrics",
+        "responses": {
+          "200": {
+            "description": "Metrics in the Prometheus text format.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-openasy-session",
+        "description": "The browser session after signing in (`openasy-session` when Identity runs on plain http://localhost). Requests that change something must come from the Identity origin."
+      },
+      "apiToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An API token created under Settings → API tokens (`oa_identity_...`): one role, always an expiry (ADR 0003)."
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "The request was refused. `code` is stable; `detail` says what to do.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Version": {
+        "type": "object",
+        "required": [
+          "product",
+          "version"
+        ],
+        "properties": {
+          "product": {
+            "const": "identity"
+          },
+          "version": {
+            "type": "string",
+            "description": "SemVer of this release.",
+            "examples": [
+              "0.1.0"
+            ]
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "description": "RFC 9457 Problem Details.",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference",
+            "examples": [
+              "https://openasy.github.io/problems/version-mismatch"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "examples": [
+              "Version mismatch"
+            ]
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string",
+            "examples": [
+              "vpn-server 0.0.9 does not match vpn 0.1.0; install vpn-server 0.1.0"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable identifier to match on in code.",
+            "enum": [
+              "invalid-token",
+              "invalid-json",
+              "invalid-body",
+              "version-mismatch",
+              "not-found",
+              "conflict",
+              "not-configured",
+              "internal-error",
+              "unauthenticated",
+              "invalid-credentials",
+              "mfa-required",
+              "mfa-setup-required",
+              "forbidden",
+              "cross-site",
+              "rate-limited"
+            ]
+          }
+        }
+      },
+      "Status": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "examples": [
+              "ok",
+              "ready"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

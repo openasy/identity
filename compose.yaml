@@ -1,0 +1,29 @@
+# Identity: single sign-on for OpenAsy products and any other application (ADR 0033).
+#
+#   openssl rand -hex 32 > openasy-kek   # seals the signing keys, client secrets and sign-in secrets (ADR 0021)
+#   docker compose up -d
+#   docker compose logs identity | grep 'no owner yet'   # the one-time link that creates the owner account
+#
+# Keep openasy-kek apart from the volume, and with your backups: without it the signing keys cannot be opened.
+services:
+  identity:
+    image: ghcr.io/openasy/identity:0.1.0
+    restart: unless-stopped
+    read_only: true
+    ports:
+      - "127.0.0.1:8080:8080"   # UI, API and OpenID provider; put a TLS proxy in front to reach it from elsewhere
+    volumes:
+      - identity-data:/data   # SQLite database
+    secrets:
+      - openasy-kek   # mounted at /run/secrets/openasy-kek
+    environment:
+      # The address people and applications open Identity at; with a TLS proxy in front, its https:// URL. It is the
+      # OpenID issuer: applications stop trusting tokens if it changes.
+      IDENTITY_PUBLIC_URL: ${IDENTITY_PUBLIC_URL:-http://localhost:8080}
+
+volumes:
+  identity-data:
+
+secrets:
+  openasy-kek:
+    file: ./openasy-kek
