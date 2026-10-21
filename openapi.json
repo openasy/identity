@@ -806,6 +806,326 @@
         "description": "Needs the admin role."
       }
     },
+    "/api/v1/directories": {
+      "get": {
+        "operationId": "listDirectories",
+        "tags": [
+          "Directory"
+        ],
+        "summary": "List LDAP and Active Directory directories",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Directories, without their passwords.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin",
+        "description": "Identity reads people and groups from each on a schedule; their people sign in with the password it keeps (ADR 0034).\n\nNeeds the admin role."
+      },
+      "post": {
+        "operationId": "createDirectory",
+        "tags": [
+          "Directory"
+        ],
+        "summary": "Add a directory",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectoryChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Added; read it with /sync.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Directory"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin",
+        "description": "Plain ldap:// needs startTls, except on localhost.\n\nNeeds the admin role."
+      }
+    },
+    "/api/v1/directories/{id}": {
+      "patch": {
+        "operationId": "updateDirectory",
+        "tags": [
+          "Directory"
+        ],
+        "summary": "Change a directory",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Directory id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectoryChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Directory"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin",
+        "description": "Fields left out keep their value.\n\nNeeds the admin role."
+      },
+      "delete": {
+        "operationId": "deleteDirectory",
+        "tags": [
+          "Directory"
+        ],
+        "summary": "Remove a directory",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Directory id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed; its people are turned off and its groups removed."
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin",
+        "description": "Its people cannot sign in any more: their password was its.\n\nNeeds the admin role."
+      }
+    },
+    "/api/v1/directories/{id}/check": {
+      "post": {
+        "operationId": "checkDirectory",
+        "tags": [
+          "Directory"
+        ],
+        "summary": "Check a directory",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Directory id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whether Identity could bind, and what the filters find. Nothing is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin",
+        "description": "Binds and counts what the filters find.\n\nNeeds the admin role."
+      }
+    },
+    "/api/v1/directories/{id}/sync": {
+      "post": {
+        "operationId": "syncDirectory",
+        "tags": [
+          "Directory"
+        ],
+        "summary": "Read a directory now",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Directory id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What was read, or the error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin",
+        "description": "People found are added or updated; people gone, or disabled in Active Directory, are turned off and signed out.\n\nNeeds the admin role."
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "operationId": "listAudit",
@@ -1632,6 +1952,228 @@
           "token": {
             "type": "string",
             "description": "Only when made: the bearer token for the provider, shown once."
+          }
+        }
+      },
+      "Directory": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "url",
+          "startTls",
+          "caCert",
+          "bindDn",
+          "baseDn",
+          "userFilter",
+          "emailAttribute",
+          "nameAttribute",
+          "groupBaseDn",
+          "groupFilter",
+          "syncMinutes",
+          "lastSyncAt",
+          "lastError",
+          "lastCounts",
+          "people",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "active-directory",
+              "ldap"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "ldaps://host:636, or ldap://host:389 with startTls."
+          },
+          "startTls": {
+            "type": "boolean"
+          },
+          "caCert": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bindDn": {
+            "type": "string",
+            "description": "The account Identity reads with; its password is never returned."
+          },
+          "baseDn": {
+            "type": "string"
+          },
+          "userFilter": {
+            "type": "string"
+          },
+          "emailAttribute": {
+            "type": "string"
+          },
+          "nameAttribute": {
+            "type": "string"
+          },
+          "groupBaseDn": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "groupFilter": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Groups that match follow the directory, with their members; null reads no groups."
+          },
+          "syncMinutes": {
+            "type": "integer"
+          },
+          "lastSyncAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastCounts": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "people": {
+                "type": "integer"
+              },
+              "groups": {
+                "type": "integer"
+              },
+              "disabled": {
+                "type": "integer"
+              }
+            }
+          },
+          "people": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DirectoryList": {
+        "type": "object",
+        "required": [
+          "directories"
+        ],
+        "properties": {
+          "directories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Directory"
+            }
+          }
+        }
+      },
+      "DirectoryChange": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "active-directory",
+              "ldap"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "ldaps://host:636, or ldap://host:389 with startTls."
+          },
+          "startTls": {
+            "type": "boolean"
+          },
+          "caCert": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bindDn": {
+            "type": "string",
+            "description": "The account Identity reads with; its password is never returned."
+          },
+          "baseDn": {
+            "type": "string"
+          },
+          "userFilter": {
+            "type": "string"
+          },
+          "emailAttribute": {
+            "type": "string"
+          },
+          "nameAttribute": {
+            "type": "string"
+          },
+          "groupBaseDn": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "groupFilter": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Groups that match follow the directory, with their members; null reads no groups."
+          },
+          "syncMinutes": {
+            "type": "integer"
+          },
+          "bindPassword": {
+            "type": "string",
+            "description": "Kept sealed with openasy-kek."
+          }
+        }
+      },
+      "DirectoryResult": {
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "people": {
+            "type": "integer"
+          },
+          "groups": {
+            "type": "integer"
+          },
+          "disabled": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
           }
         }
       }

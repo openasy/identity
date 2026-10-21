@@ -115,6 +115,17 @@ describe("responses match openapi.json", () => {
     await call("GET", "/api/v1/provisioning", as(owner));
     await call("POST", "/api/v1/provisioning/token", as(owner, {}));
     await call("DELETE", "/api/v1/provisioning/token", as(owner, undefined, "DELETE"));
+    const dir = (await call("POST", "/api/v1/directories", as(owner, { name: "AD", url: "ldaps://127.0.0.1:1", bindDn: "cn=reader", bindPassword: "x", baseDn: "dc=example,dc=com" }))).body as { id: string };
+    await call("POST", "/api/v1/directories", as(owner, { name: "AD", url: "ldaps://127.0.0.1:1", bindDn: "cn=reader", bindPassword: "x", baseDn: "dc=example,dc=com" }));
+    await call("POST", "/api/v1/directories", as(owner, { name: "Plain", url: "ldap://ad.example.com", bindDn: "cn=reader", bindPassword: "x", baseDn: "dc=example,dc=com" }));
+    await call("GET", "/api/v1/directories", as(owner));
+    await call("PATCH", "/api/v1/directories/{id}", as(owner, { syncMinutes: 30 }), `/api/v1/directories/${dir.id}`);
+    await call("PATCH", "/api/v1/directories/{id}", as(owner, { syncMinutes: 1 }), `/api/v1/directories/${dir.id}`);
+    await call("POST", "/api/v1/directories/{id}/check", as(owner, {}), `/api/v1/directories/${dir.id}/check`);
+    await call("POST", "/api/v1/directories/{id}/sync", as(owner, {}), `/api/v1/directories/${dir.id}/sync`);
+    await call("POST", "/api/v1/directories/{id}/sync", as(owner, {}), "/api/v1/directories/missing/sync");
+    await call("DELETE", "/api/v1/directories/{id}", as(owner, undefined, "DELETE"), `/api/v1/directories/${dir.id}`);
+    await call("DELETE", "/api/v1/directories/{id}", as(owner, undefined, "DELETE"), `/api/v1/directories/${dir.id}`);
     await call("GET", "/api/v1/overview", {});
     await call("GET", "/api/v1/audit", as(owner), "/api/v1/audit?type=group-added&limit=5");
     await call("GET", "/api/v1/audit", as(owner), "/api/v1/audit?limit=5000");

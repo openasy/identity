@@ -81,6 +81,36 @@ const MIGRATIONS = [
      updated_at TEXT NOT NULL
    );
    ALTER TABLE groups ADD COLUMN external_id TEXT;`,
+  // 0.1.0: LDAP and Active Directory (ADR 0034). Each directory is read on a schedule; its people sign in with the
+  // password it keeps, checked there.
+  `CREATE TABLE directories (
+     id TEXT PRIMARY KEY,
+     name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+     kind TEXT NOT NULL CHECK (kind IN ('active-directory', 'ldap')),
+     url TEXT NOT NULL,
+     start_tls INTEGER NOT NULL DEFAULT 0,
+     ca_cert TEXT,
+     bind_dn TEXT NOT NULL,
+     bind_password TEXT NOT NULL,
+     base_dn TEXT NOT NULL,
+     user_filter TEXT NOT NULL,
+     email_attribute TEXT NOT NULL,
+     name_attribute TEXT NOT NULL,
+     group_base_dn TEXT,
+     group_filter TEXT,
+     sync_minutes INTEGER NOT NULL DEFAULT 60,
+     last_sync_at TEXT,
+     last_error TEXT,
+     last_counts TEXT,
+     created_at TEXT NOT NULL
+   );
+   CREATE TABLE directory_users (
+     user_id TEXT PRIMARY KEY,
+     directory_id TEXT NOT NULL REFERENCES directories (id) ON DELETE CASCADE,
+     dn TEXT NOT NULL,
+     seen_at TEXT NOT NULL
+   );
+   CREATE INDEX directory_users_directory ON directory_users (directory_id);`,
 ];
 
 /** Opens the product's single SQLite file in WAL mode (ADR 0011) and migrates it forward. */

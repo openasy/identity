@@ -8,6 +8,7 @@ import { createDirectory } from "./directory.ts";
 import { createKeyring } from "./kek.ts";
 import { log } from "./log.ts";
 import { createOidc } from "./oidc.ts";
+import { createDirectories } from "./ldap.ts";
 import { createScim } from "./scim.ts";
 
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
@@ -36,6 +37,7 @@ if (!kek) {
 const db = openDb(dbPath);
 const directory = createDirectory(db, createKeyring(kek));
 const audit = createAudit(db);
+const directories = createDirectories({ db, keyring: createKeyring(kek), audit });
 // The address people open Identity at, behind the TLS proxy (ADR 0026). It is also the OpenID issuer, so it must not
 // change once applications use it.
 const publicUrl = (process.env.IDENTITY_PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/$/, "");
@@ -48,6 +50,8 @@ const auth = createAuth({
   passwords: process.env.IDENTITY_PASSWORD_SIGN_IN !== "false",
   // The directory: people who sign in to applications have the user role and do not manage Identity.
   users: true,
+  // People read from LDAP or Active Directory sign in with the password it keeps.
+  externalPasswords: { managedBy: directories.managedBy, verify: directories.verify },
   oidc: oidcFromEnv(process.env, "IDENTITY_"),
   // Groups that follow an identity provider's group get their members at each sign-in.
   onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups),
@@ -65,6 +69,7 @@ const server = createServer(
     oidc,
     audit,
     scim: createScim({ db, audit, base: publicUrl }),
+    directories,
     webDir: !headless && existsSync(webDir) ? webDir : undefined,
     docsDir: existsSync(docsDir) ? docsDir : undefined,
     openapi,
@@ -79,10 +84,18 @@ const setup = auth.setupLink();
 // No default password (ADR 0013): the first person to open this link becomes the owner.
 if (setup) log("info", "no owner yet: open this link once to create the owner account", { url: setup });
 const purge = setInterval(() => (auth.purge(), oidc.purge(), audit.purge()), 5 * 60_000);
+// Directories are read when their interval has passed; one at a time, never two reads of the same one.
+let syncing = false;
+const sync = setInterval(() => {
+  if (syncing) return;
+  syncing = true;
+  void directories.syncDue().finally(() => (syncing = false));
+}, 60_000);
 
 function shutdown(signal: string) {
   log("info", "shutting down", { signal });
   clearInterval(purge);
+  clearInterval(sync);
   server.close(() => {
     db.close();
     process.exit(0);

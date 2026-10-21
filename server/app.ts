@@ -8,6 +8,7 @@ import type { Audit } from "./audit.ts";
 import type { Directory } from "./directory.ts";
 import { countRequest, renderMetrics } from "./metrics.ts";
 import type { Oidc } from "./oidc.ts";
+import type { Directories } from "./ldap.ts";
 import type { Scim } from "./scim.ts";
 
 export interface AppOptions {
@@ -19,6 +20,7 @@ export interface AppOptions {
   oidc: Oidc;
   audit: Audit;
   scim: Scim;
+  directories: Directories;
   /** Built web UI; omit to run headless (ADR 0018). */
   webDir?: string;
   /** Built API reference (Swagger UI), served at /api/docs. */
@@ -129,7 +131,7 @@ interface Route {
   handle: (ctx: Ctx) => unknown;
 }
 
-export function createApp({ db, version, auth, directory, oidc, audit, scim, webDir, docsDir, openapi }: AppOptions) {
+export function createApp({ db, version, auth, directory, oidc, audit, scim, directories, webDir, docsDir, openapi }: AppOptions) {
   // The served description includes /api/v1/auth from @openasy/auth, so the API reference documents sign-in too.
   const spec = openapi && JSON.stringify({ ...mergeOpenApi(openapi), info: { ...(openapi.info as object), version } });
 
@@ -253,6 +255,42 @@ export function createApp({ db, version, auth, directory, oidc, audit, scim, web
         return noContent(res);
       },
     },
+
+    // LDAP and Active Directory: read on a schedule; their people sign in with its password (ADR 0034).
+    { method: "GET", path: "/api/v1/directories", auth: "admin", handle: () => ({ directories: directories.list() }) },
+    {
+      method: "POST",
+      path: "/api/v1/directories",
+      auth: "admin",
+      handle: async ({ res, body, record }) => {
+        const d = directories.create(await body());
+        record("directory-added", d.id, `${d.name} (${d.url})`);
+        return created(res, d);
+      },
+    },
+    {
+      method: "PATCH",
+      path: "/api/v1/directories/:id",
+      auth: "admin",
+      handle: async ({ params, body, record }) => {
+        const d = directories.update(params[0]!, await body());
+        record("directory-updated", d.id, d.name);
+        return d;
+      },
+    },
+    {
+      method: "DELETE",
+      path: "/api/v1/directories/:id",
+      auth: "admin",
+      handle: ({ res, params, record }) => {
+        const d = directories.directory(params[0]!);
+        directories.remove(d.id);
+        record("directory-removed", d.id, `${d.name}: ${d.people} people turned off`);
+        return noContent(res);
+      },
+    },
+    { method: "POST", path: "/api/v1/directories/:id/check", auth: "admin", handle: ({ params }) => directories.check(params[0]!) },
+    { method: "POST", path: "/api/v1/directories/:id/sync", auth: "admin", handle: ({ params }) => directories.sync(params[0]!) },
 
     // What happened: sign-ins, refusals and changes, newest first (ADR 0013).
     {

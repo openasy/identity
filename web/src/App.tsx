@@ -1,15 +1,16 @@
 import { AppShell, BrandProvider, Button, Callout, EmptyState, PageHeader } from "@openasy/ui";
 import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAuth } from "@openasy/auth/react";
-import { AppWindow, ArrowRight, RefreshCw, KeyRound, LayoutDashboard, LogIn, LogOut, ScrollText, UserRound, Users, UsersRound } from "lucide-react";
+import { AppWindow, ArrowRight, FolderTree, RefreshCw, KeyRound, LayoutDashboard, LogIn, LogOut, ScrollText, UserRound, Users, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ApplicationsPage } from "./applications.tsx";
+import { DirectoriesPage } from "./directories.tsx";
 import { GroupsPage } from "./groups.tsx";
 import { AuditPage, OverviewPage } from "./overview.tsx";
 import { PeoplePage } from "./people.tsx";
 import { ProvisioningPage } from "./provisioning.tsx";
 import { useApi } from "./shared.tsx";
 
-const PAGES = ["overview", "applications", "people", "groups", "audit", "account", "members", "signin", "provisioning", "tokens"] as const;
+const PAGES = ["overview", "applications", "people", "groups", "audit", "account", "members", "signin", "provisioning", "directories", "tokens"] as const;
 type Page = (typeof PAGES)[number];
 
 function parsePage(hash: string): Page {
@@ -86,6 +87,7 @@ function Product() {
           { id: "members", label: "Members", icon: Users },
           { id: "signin", label: "Sign-in", icon: LogIn },
           { id: "provisioning", label: "Provisioning", icon: RefreshCw },
+          { id: "directories", label: "Directories", icon: FolderTree },
           { id: "tokens", label: "API tokens", icon: KeyRound },
         ]
       : []),
@@ -105,6 +107,8 @@ function Product() {
         <PeoplePage call={call} />
       ) : shown === "groups" ? (
         <GroupsPage call={call} />
+      ) : shown === "directories" ? (
+        can("admin") ? <DirectoriesPage call={call} /> : <EmptyState title="Admins only">Ask an admin of this Identity for access.</EmptyState>
       ) : shown === "provisioning" ? (
         can("admin") ? <ProvisioningPage call={call} /> : <EmptyState title="Admins only">Ask an admin of this Identity for access.</EmptyState>
       ) : shown !== "account" && !can("admin") ? (

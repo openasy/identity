@@ -9,6 +9,7 @@ import { openDb } from "./db.ts";
 import { createDirectory } from "./directory.ts";
 import { createKeyring } from "./kek.ts";
 import { createOidc } from "./oidc.ts";
+import { createDirectories } from "./ldap.ts";
 import { createScim } from "./scim.ts";
 
 export const KEK = Buffer.alloc(32, 7);
@@ -23,12 +24,13 @@ export async function startApp(opts: Partial<AppOptions> & { version: string }) 
   const keyring = createKeyring(KEK);
   const directory = createDirectory(db, keyring);
   const audit = createAudit(db);
-  const auth = createAuth({ db, product: "identity", productName: "OpenAsy Identity", origin: base, secretsKey: KEK, users: true, onEvent: (e) => audit.record(e), onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups) });
+  const directories = createDirectories({ db, keyring, audit });
+  const auth = createAuth({ db, product: "identity", productName: "OpenAsy Identity", origin: base, secretsKey: KEK, users: true, externalPasswords: { managedBy: directories.managedBy, verify: directories.verify }, onEvent: (e) => audit.record(e), onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups) });
   const oidc = createOidc({ db, keyring, directory, auth, audit, issuer: base });
   const scim = createScim({ db, audit, base });
-  handler = createApp({ db, auth, directory, oidc, audit, scim, ...opts });
+  handler = createApp({ db, auth, directory, oidc, audit, scim, directories, ...opts });
   const close = () => new Promise<void>((resolve) => server.close(() => resolve()));
-  return { db, auth, directory, oidc, audit, scim, base, close };
+  return { db, auth, directory, oidc, audit, scim, directories, base, close };
 }
 
 export const UA = "Mozilla/5.0 (Macintosh) Chrome/141.0";
