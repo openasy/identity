@@ -1,4 +1,4 @@
-import { Badge, Button, Checkbox, PageHeader, Panel, SelectField, TextField, type Column } from "@openasy/ui";
+import { Badge, Button, Checkbox, Dialog, PageHeader, Panel, SelectField, TextField, type Column } from "@openasy/ui";
 import { useAuth } from "@openasy/auth/react";
 import { Plus, Trash2, Users } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -17,22 +17,27 @@ function Members({ call, group, people, onDone }: { call: Call; group: Group; pe
   const action = useAction();
   const save = () => action.run(() => call(`/api/v1/groups/${group.id}/members`, { method: "PUT", body: JSON.stringify({ userIds: chosen }) }).then(onDone));
   return (
-    <Panel title={`Members of ${group.name}`} description="They can sign in to the applications this group may use, and the group goes to those applications in the groups claim.">
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onDone()}
+      title={`Members of ${group.name}`}
+      description="They can sign in to the applications this group may use, and the group goes to those applications in the groups claim."
+      footer={
+        <>
+          <Button onClick={onDone}>Cancel</Button>
+          <Button variant="primary" loading={action.busy} onClick={() => void save()}>
+            Save members
+          </Button>
+        </>
+      }
+    >
       <div className="flex flex-col gap-1.5">
         {people.map((p) => (
           <Checkbox key={p.id} label={p.name} description={p.email} checked={chosen.includes(p.id)} onChange={(e) => setChosen(e.target.checked ? [...chosen, p.id] : chosen.filter((id) => id !== p.id))} />
         ))}
-        <Problem error={action.error} title="Not saved" />
-        <span className="mt-2 flex gap-2">
-          <Button variant="primary" loading={action.busy} onClick={() => void save()}>
-            Save members
-          </Button>
-          <Button variant="ghost" onClick={onDone}>
-            Cancel
-          </Button>
-        </span>
       </div>
-    </Panel>
+      <Problem error={action.error} title="Not saved" />
+    </Dialog>
   );
 }
 
@@ -45,16 +50,15 @@ export function GroupsPage({ call }: { call: Call }) {
   const [syncedFrom, setSyncedFrom] = useState("");
   const [mfa, setMfa] = useState<Group["mfa"]>("optional");
   const [editing, setEditing] = useState<Group>();
+  const [adding, setAdding] = useState(false);
   const action = useAction();
+  const close = () => (setAdding(false), setName(""), setDescription(""), setSyncedFrom(""), setMfa("optional"), action.clear());
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
     await action.run(async () => {
       await call("/api/v1/groups", { method: "POST", body: JSON.stringify({ name, description, mfa, syncedFrom: syncedFrom.trim() || null }) });
-      setName("");
-      setDescription("");
-      setSyncedFrom("");
-      setMfa("optional");
+      close();
       reload();
     });
   };
@@ -108,29 +112,46 @@ export function GroupsPage({ call }: { call: Call }) {
       <PageHeader
         title="Groups"
         description="Groups decide who may sign in to which application, and applications receive them to give people roles. Where a second factor is required, members sign in to applications with an authenticator app, a passkey or an identity provider."
-      />
-      {can("editor") && (
-        <Panel title="Add a group">
-          <form onSubmit={add} className="flex flex-wrap items-end gap-2">
-            <TextField label="Name" placeholder="Engineering" value={name} onChange={(e) => setName(e.target.value)} />
-            <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-            <SelectField label="Second factor" value={mfa} options={MFA_OPTIONS} onChange={(e) => setMfa(e.target.value as Group["mfa"])} />
-            <TextField
-              label="Members from a provider"
-              mono
-              placeholder="keycloak:ops-admins"
-              hint="Optional: <provider id>:<group there>. Members then follow that group at each sign-in."
-              value={syncedFrom}
-              onChange={(e) => setSyncedFrom(e.target.value)}
-            />
-            <Button type="submit" variant="primary" icon={<Plus />} loading={action.busy} disabled={!name.trim()}>
+        actions={
+          can("editor") && (
+            <Button variant="primary" icon={<Plus />} onClick={() => setAdding(true)}>
               Add group
             </Button>
-          </form>
-        </Panel>
-      )}
+          )
+        }
+      />
+      <Dialog
+        open={adding}
+        onOpenChange={(open) => !open && close()}
+        title="Add a group"
+        description="Then choose its members, and which applications it may sign in to."
+        onSubmit={add}
+        footer={
+          <>
+            <Button type="button" onClick={close}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={action.busy} disabled={!name.trim()}>
+              Add group
+            </Button>
+          </>
+        }
+      >
+        <Problem error={action.error} title="Not added" />
+        <TextField label="Name" placeholder="Engineering" value={name} onChange={(e) => setName(e.target.value)} />
+        <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <SelectField label="Second factor" value={mfa} options={MFA_OPTIONS} onChange={(e) => setMfa(e.target.value as Group["mfa"])} />
+        <TextField
+          label="Members from a provider"
+          mono
+          placeholder="keycloak:ops-admins"
+          hint="Optional: <provider id>:<group there>. Members then follow that group at each sign-in."
+          value={syncedFrom}
+          onChange={(e) => setSyncedFrom(e.target.value)}
+        />
+      </Dialog>
       {editing && people.data && <Members key={editing.id} call={call} group={editing} people={people.data.people} onDone={() => (setEditing(undefined), reload(), people.reload())} />}
-      <Problem error={action.error} />
+      {!adding && <Problem error={action.error} />}
       <Panel flush>
         <List label="Groups" rows={data?.groups} columns={columns} empty="No groups yet" getRowId={(g) => g.id} />
       </Panel>

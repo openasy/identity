@@ -1,6 +1,6 @@
-import { Badge, Button, Callout, Checkbox, PageHeader, Panel, SelectField, TextField, type Column } from "@openasy/ui";
+import { Badge, Button, Callout, Checkbox, Dialog, PageHeader, Panel, SelectField, TextField, type Column } from "@openasy/ui";
 import { useAuth } from "@openasy/auth/react";
-import { KeyRound, Plus, Trash2 } from "lucide-react";
+import { Check, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { Application, ApplicationSecret, Group } from "./api.ts";
 import { Code, List, Problem, useAction, useData, type Call } from "./shared.tsx";
@@ -32,34 +32,31 @@ function SamlDetails({ issuer, aws }: { issuer: string; aws: boolean }) {
 function Created({ created, issuer, onDone }: { created: ApplicationSecret; issuer: string; onDone: () => void }) {
   const { application: a, clientSecret } = created;
   const t = TEMPLATES[a.template];
+  const done = (
+    <Button variant="primary" onClick={onDone}>
+      Done
+    </Button>
+  );
   if (!clientSecret)
     return (
-      <Callout
-        tone="info"
-        title={`Set up ${a.name} with Identity`}
-        action={
-          <Button size="sm" onClick={onDone}>
-            Done
-          </Button>
-        }
-      >
+      <Dialog open onOpenChange={(open) => !open && onDone()} size="lg" icon={<Check aria-hidden className="size-4" />} iconTone="success" title={`Set up ${a.name} with Identity`} footer={done}>
         <span className="flex flex-col gap-2">
           <SamlDetails issuer={issuer} aws={a.template === "aws"} />
         </span>
-      </Callout>
+      </Dialog>
     );
   return (
-    <Callout
-      tone="warning"
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onDone()}
+      size="lg"
+      icon={<Check aria-hidden className="size-4" />}
+      iconTone="success"
       title={`Copy the secret for ${a.name} now`}
-      action={
-        <Button size="sm" onClick={onDone}>
-          Done
-        </Button>
-      }
+      description="Identity keeps it encrypted and does not show it again; a new one can be made later."
+      footer={done}
     >
       <span className="flex flex-col gap-2">
-        <span>Identity keeps it encrypted and does not show it again; a new one can be made later.</span>
         <Code label={`Settings for ${a.name}`}>{`Issuer         ${issuer}\nClient ID      ${a.id}\nClient secret  ${clientSecret}`}</Code>
         {t.prefix ? (
           <>
@@ -72,11 +69,12 @@ function Created({ created, issuer, onDone }: { created: ApplicationSecret; issu
           <span>Set the application up with them; it must send PKCE (S256), and asks for the scopes openid, email, profile and groups.</span>
         )}
       </span>
-    </Callout>
+      <Callout tone="warning" title="Closing this dialog hides the secret" />
+    </Dialog>
   );
 }
 
-function AddApplication({ call, groups, onCreated }: { call: Call; groups: Group[]; onCreated: (c: ApplicationSecret) => void }) {
+function AddApplication({ call, groups, onCreated, onCancel }: { call: Call; groups: Group[]; onCreated: (c: ApplicationSecret) => void; onCancel: () => void }) {
   const [template, setTemplate] = useState<Application["template"]>("openasy-vpn");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -100,75 +98,78 @@ function AddApplication({ call, groups, onCreated }: { call: Call; groups: Group
         ...(saml ? { entityId: entityId.trim(), acsUrl: acsUrl.trim(), nameId } : product ? { url: url.trim() } : { redirectUris: redirects.split(/[\s,]+/).filter(Boolean) }),
       };
       onCreated(await call<ApplicationSecret>("/api/v1/applications", { method: "POST", body: JSON.stringify(body) }));
-      setName("");
-      setUrl("");
-      setRedirects("");
-      setEntityId("");
-      setAcsUrl("");
-      setChosen([]);
-      setEveryone(false);
     });
   };
   return (
-    <Panel title="Add an application" description="People sign in to it with Identity. Choose who may.">
-      <form onSubmit={submit} className="flex flex-col gap-3">
-        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))" }}>
-          <SelectField label="Application" value={template} onChange={(e) => setTemplate(e.target.value as Application["template"])} options={Object.entries(TEMPLATES).map(([value, t]) => ({ value, label: t.label }))} />
-          <TextField label="Name" placeholder={TEMPLATES[template].label} value={name} onChange={(e) => setName(e.target.value)} />
-          {saml ? (
-            <>
-              <TextField
-                label={template === "aws" ? "IAM Identity Center issuer URL" : "Entity ID"}
-                mono
-                placeholder={template === "aws" ? "https://us-east-1.signin.aws.amazon.com/platform/saml/d-1234567890" : "https://jira.example.com"}
-                hint="Who the application is: the audience of Identity's answers."
-                value={entityId}
-                onChange={(e) => setEntityId(e.target.value)}
-              />
-              <TextField
-                label="ACS URL"
-                mono
-                placeholder={template === "aws" ? "https://us-east-1.signin.aws.amazon.com/platform/saml/acs/..." : "https://jira.example.com/plugins/servlet/samlconsumer"}
-                hint="Where it receives answers. Identity answers only here."
-                value={acsUrl}
-                onChange={(e) => setAcsUrl(e.target.value)}
-              />
-              <SelectField
-                label="Name people by"
-                value={nameId}
-                onChange={(e) => setNameId(e.target.value as "email" | "persistent")}
-                options={[
-                  { value: "email", label: "Email address" },
-                  { value: "persistent", label: "A stable id that never changes" },
-                ]}
-              />
-            </>
-          ) : product ? (
-            <TextField label="Address people open it at" mono placeholder="https://vpn.example.com" hint="Its callback addresses are filled in." value={url} onChange={(e) => setUrl(e.target.value)} />
-          ) : (
-            <TextField label="Redirect URIs" mono placeholder="https://grafana.example.com/login/generic_oauth" hint="https, or http on localhost; several separated by spaces." value={redirects} onChange={(e) => setRedirects(e.target.value)} />
-          )}
-        </div>
-        <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
-          <legend className="mb-1 text-xs font-medium text-fg">Who may sign in</legend>
-          <Checkbox label="Everyone in the directory" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} />
-          {!everyone &&
-            (groups.length ? (
-              groups.map((g) => (
-                <Checkbox key={g.id} label={g.name} description={g.description || undefined} checked={chosen.includes(g.name)} onChange={(e) => setChosen(e.target.checked ? [...chosen, g.name] : chosen.filter((n) => n !== g.name))} />
-              ))
-            ) : (
-              <span className="text-xs text-fg-muted">No groups yet: add one under Groups, or let everyone in.</span>
-            ))}
-        </fieldset>
-        <Problem error={action.error} title="Not added" />
-        <span>
-          <Button type="submit" variant="primary" icon={<Plus />} loading={action.busy} disabled={saml ? !entityId.trim() || !acsUrl.trim() : product ? !url.trim() : !redirects.trim()}>
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onCancel()}
+      size="lg"
+      title="Add an application"
+      description="People sign in to it with Identity. Choose who may."
+      onSubmit={submit}
+      footer={
+        <>
+          <Button type="button" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" loading={action.busy} disabled={saml ? !entityId.trim() || !acsUrl.trim() : product ? !url.trim() : !redirects.trim()}>
             Add application
           </Button>
-        </span>
-      </form>
-    </Panel>
+        </>
+      }
+    >
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))" }}>
+        <SelectField label="Application" value={template} onChange={(e) => setTemplate(e.target.value as Application["template"])} options={Object.entries(TEMPLATES).map(([value, t]) => ({ value, label: t.label }))} />
+        <TextField label="Name" placeholder={TEMPLATES[template].label} value={name} onChange={(e) => setName(e.target.value)} />
+        {saml ? (
+          <>
+            <TextField
+              label={template === "aws" ? "IAM Identity Center issuer URL" : "Entity ID"}
+              mono
+              placeholder={template === "aws" ? "https://us-east-1.signin.aws.amazon.com/platform/saml/d-1234567890" : "https://jira.example.com"}
+              hint="Who the application is: the audience of Identity's answers."
+              value={entityId}
+              onChange={(e) => setEntityId(e.target.value)}
+            />
+            <TextField
+              label="ACS URL"
+              mono
+              placeholder={template === "aws" ? "https://us-east-1.signin.aws.amazon.com/platform/saml/acs/..." : "https://jira.example.com/plugins/servlet/samlconsumer"}
+              hint="Where it receives answers. Identity answers only here."
+              value={acsUrl}
+              onChange={(e) => setAcsUrl(e.target.value)}
+            />
+            <SelectField
+              label="Name people by"
+              value={nameId}
+              onChange={(e) => setNameId(e.target.value as "email" | "persistent")}
+              options={[
+                { value: "email", label: "Email address" },
+                { value: "persistent", label: "A stable id that never changes" },
+              ]}
+            />
+          </>
+        ) : product ? (
+          <TextField label="Address people open it at" mono placeholder="https://vpn.example.com" hint="Its callback addresses are filled in." value={url} onChange={(e) => setUrl(e.target.value)} />
+        ) : (
+          <TextField label="Redirect URIs" mono placeholder="https://grafana.example.com/login/generic_oauth" hint="https, or http on localhost; several separated by spaces." value={redirects} onChange={(e) => setRedirects(e.target.value)} />
+        )}
+      </div>
+      <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+        <legend className="mb-1 text-xs font-medium text-fg">Who may sign in</legend>
+        <Checkbox label="Everyone in the directory" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} />
+        {!everyone &&
+          (groups.length ? (
+            groups.map((g) => (
+              <Checkbox key={g.id} label={g.name} description={g.description || undefined} checked={chosen.includes(g.name)} onChange={(e) => setChosen(e.target.checked ? [...chosen, g.name] : chosen.filter((n) => n !== g.name))} />
+            ))
+          ) : (
+            <span className="text-xs text-fg-muted">No groups yet: add one under Groups, or let everyone in.</span>
+          ))}
+      </fieldset>
+      <Problem error={action.error} title="Not added" />
+    </Dialog>
   );
 }
 
@@ -177,6 +178,7 @@ export function ApplicationsPage({ call }: { call: Call }) {
   const { data, reload } = useData<{ applications: Application[]; issuer: string }>(call, "/api/v1/applications", 30_000);
   const groups = useData<{ groups: Group[] }>(call, "/api/v1/groups", 0).data?.groups ?? [];
   const [created, setCreated] = useState<ApplicationSecret>();
+  const [adding, setAdding] = useState(false);
   const action = useAction();
   const issuer = data?.issuer ?? "";
 
@@ -215,8 +217,18 @@ export function ApplicationsPage({ call }: { call: Call }) {
 
   return (
     <>
-      <PageHeader title="Applications" description={issuer ? `Applications sign people in with OpenID Connect at the issuer ${issuer}.` : "Applications sign people in with OpenID Connect."} />
-      {can("admin") && <AddApplication call={call} groups={groups} onCreated={(c) => (setCreated(c), reload())} />}
+      <PageHeader
+        title="Applications"
+        description={issuer ? `Applications sign people in with OpenID Connect at the issuer ${issuer}.` : "Applications sign people in with OpenID Connect."}
+        actions={
+          can("admin") && (
+            <Button variant="primary" icon={<Plus />} onClick={() => setAdding(true)}>
+              Add application
+            </Button>
+          )
+        }
+      />
+      {adding && <AddApplication call={call} groups={groups} onCreated={(c) => (setAdding(false), setCreated(c), reload())} onCancel={() => setAdding(false)} />}
       {created && <Created created={created} issuer={issuer} onDone={() => setCreated(undefined)} />}
       <Problem error={action.error} />
       <Panel flush>
