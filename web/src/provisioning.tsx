@@ -1,7 +1,8 @@
-import { Button, Callout, PageHeader, Panel } from "@openasy/ui";
+import { Button, Callout, PageHeader, Panel, useAgo } from "@openasy/ui";
 import { KeyRound, Power } from "lucide-react";
 import { useState } from "react";
-import { Code, Problem, ago, useAction, useData, type Call } from "./shared.tsx";
+import { Code, Problem, useAction, useData, type Call } from "./shared.tsx";
+import { useT } from "./i18n.ts";
 
 interface Provisioning {
   url: string;
@@ -12,6 +13,8 @@ interface Provisioning {
 
 /** Settings, Provisioning: the SCIM address and token an identity provider sends people and groups with (ADR 0034). */
 export function ProvisioningPage({ call }: { call: Call }) {
+  const ago = useAgo();
+  const t = useT();
   const { data, reload } = useData<Provisioning>(call, "/api/v1/provisioning", 30_000);
   const [token, setToken] = useState<string>();
   const action = useAction();
@@ -19,46 +22,46 @@ export function ProvisioningPage({ call }: { call: Call }) {
   return (
     <>
       <PageHeader
-        title="Provisioning"
-        description="Okta, Microsoft Entra ID and other identity providers create, change and remove people and groups here with SCIM 2.0. When someone leaves, the provider turns them off and they lose every application at once. It never changes the people who manage Identity."
+        title={t("provisioningPage.provisioning")}
+        description={t("provisioningPage.oktaMicrosoftEntraIdAnd")}
       />
-      <Panel title="SCIM" description={on ? `On since ${new Date(data!.tokenCreatedAt!).toLocaleDateString()}; last request ${ago(data!.lastUsedAt)}.` : "Off: make a token to turn it on."}>
+      <Panel title="SCIM" description={on ? t("provisioningPage.onSinceLastRequest", { value: new Date(data!.tokenCreatedAt!).toLocaleDateString(), ago: ago(data!.lastUsedAt) }) : t("provisioningPage.offMakeATokenTo")}>
         <div className="flex flex-col gap-3">
-          {data && <Code label="SCIM base URL">{data.url}</Code>}
+          {data && <Code label={t("provisioningPage.scimBaseUrl")}>{data.url}</Code>}
           <span className="flex gap-2">
             <Button
               variant={on ? "secondary" : "primary"}
               icon={<KeyRound />}
               loading={action.busy}
               onClick={() =>
-                (!on || confirm("Make a new token? The provider's current one stops working at once.")) &&
+                (!on || confirm(t("provisioningPage.makeANewTokenThe"))) &&
                 void action.run(async () => (setToken((await call<Provisioning>("/api/v1/provisioning/token", { method: "POST" })).token), reload()))
               }
             >
-              {on ? "New token" : "Make a token"}
+              {on ? t("provisioningPage.newToken") : t("provisioningPage.makeAToken")}
             </Button>
             {on && (
-              <Button variant="ghost" icon={<Power />} onClick={() => confirm("Turn SCIM off? The provider can no longer change anyone here.") && void action.run(() => call("/api/v1/provisioning/token", { method: "DELETE" }).then(() => (setToken(undefined), reload())))}>
-                Turn off
+              <Button variant="ghost" icon={<Power />} onClick={() => confirm(t("provisioningPage.turnScimOffTheProvider")) && void action.run(() => call("/api/v1/provisioning/token", { method: "DELETE" }).then(() => (setToken(undefined), reload())))}>
+                {t("provisioningPage.turnOff")}
               </Button>
             )}
           </span>
           <Problem error={action.error} />
           {token && (
-            <Callout tone="warning" title="Copy the token now" onDismiss={() => setToken(undefined)}>
+            <Callout tone="warning" title={t("provisioningPage.copyTheTokenNow")} onDismiss={() => setToken(undefined)}>
               <span className="flex flex-col gap-2">
-                <span>Identity keeps only its hash. Enter it in the provider as the bearer token, or secret token, with the base URL above.</span>
-                <Code label="SCIM token">{token}</Code>
+                <span>{t("provisioningPage.identityKeepsOnlyItsHash")}</span>
+                <Code label={t("provisioningPage.scimToken")}>{token}</Code>
               </span>
             </Callout>
           )}
         </div>
       </Panel>
-      <Panel title="At the provider">
+      <Panel title={t("provisioningPage.atTheProvider")}>
         <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 text-sm">
-          <li>Okta: in the app, Provisioning, choose SCIM 2.0 with HTTP header authentication, enter the base URL and the token, and turn on creating, updating and deactivating users and pushing groups.</li>
-          <li>Microsoft Entra ID: in the enterprise application, Provisioning, choose Automatic, enter the base URL as the tenant URL and the token as the secret token, and test the connection.</li>
-          <li>People provisioned this way sign in through that provider: add it under Sign-in, and they are matched by their verified email.</li>
+          <li>{t("provisioningPage.oktaInTheAppProvisioning")}</li>
+          <li>{t("provisioningPage.microsoftEntraIdInThe")}</li>
+          <li>{t("provisioningPage.peopleProvisionedThisWaySign")}</li>
         </ul>
       </Panel>
     </>

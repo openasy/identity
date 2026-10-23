@@ -4,15 +4,17 @@ import { Plus, Trash2, Users } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { Group, Person } from "./api.ts";
 import { List, Problem, useAction, useData, type Call } from "./shared.tsx";
+import { useT, type T } from "./i18n.ts";
 
-const MFA_OPTIONS = [
-  { value: "optional", label: "Optional" },
-  { value: "required", label: "Required" },
-  { value: "passkey", label: "Passkey only" },
-];
+const MFA_OPTIONS = (t: T) => ([
+  { value: "optional", label: t("mfaOptions.optional") },
+  { value: "required", label: t("mfaOptions.required") },
+  { value: "passkey", label: t("mfaOptions.passkeyOnly") },
+]);
 
 /** Choosing a group's members by hand; groups that follow a provider take theirs from it. */
 function Members({ call, group, people, onDone }: { call: Call; group: Group; people: Person[]; onDone: () => void }) {
+  const t = useT();
   const [chosen, setChosen] = useState(() => people.filter((p) => p.groups.includes(group.name)).map((p) => p.id));
   const action = useAction();
   const save = () => action.run(() => call(`/api/v1/groups/${group.id}/members`, { method: "PUT", body: JSON.stringify({ userIds: chosen }) }).then(onDone));
@@ -20,13 +22,13 @@ function Members({ call, group, people, onDone }: { call: Call; group: Group; pe
     <Dialog
       open
       onOpenChange={(open) => !open && onDone()}
-      title={`Members of ${group.name}`}
-      description="They can sign in to the applications this group may use, and the group goes to those applications in the groups claim."
+      title={t("members.membersOf", { name: group.name })}
+      description={t("members.theyCanSignInTo")}
       footer={
         <>
-          <Button onClick={onDone}>Cancel</Button>
+          <Button onClick={onDone}>{t("members.cancel")}</Button>
           <Button variant="primary" loading={action.busy} onClick={() => void save()}>
-            Save members
+            {t("members.saveMembers")}
           </Button>
         </>
       }
@@ -36,12 +38,13 @@ function Members({ call, group, people, onDone }: { call: Call; group: Group; pe
           <Checkbox key={p.id} label={p.name} description={p.email} checked={chosen.includes(p.id)} onChange={(e) => setChosen(e.target.checked ? [...chosen, p.id] : chosen.filter((id) => id !== p.id))} />
         ))}
       </div>
-      <Problem error={action.error} title="Not saved" />
+      <Problem error={action.error} title={t("members.notSaved")} />
     </Dialog>
   );
 }
 
 export function GroupsPage({ call }: { call: Call }) {
+  const t = useT();
   const { can } = useAuth();
   const { data, reload } = useData<{ groups: Group[] }>(call, "/api/v1/groups", 30_000);
   const people = useData<{ people: Person[] }>(call, "/api/v1/people", 0);
@@ -64,24 +67,24 @@ export function GroupsPage({ call }: { call: Call }) {
   };
 
   const columns: Column<Group>[] = [
-    { id: "name", header: "Group", cell: (g) => g.name, sortValue: (g) => g.name },
-    { id: "description", header: "Description", cell: (g) => g.description || <span className="text-fg-muted">none</span> },
-    { id: "members", header: "Members", width: "100px", align: "right", cell: (g) => g.members, sortValue: (g) => g.members },
-    { id: "source", header: "Members from", width: "200px", cell: (g) => (g.syncedFrom ? <Badge tone="info">{g.syncedFrom}</Badge> : "Chosen here") },
+    { id: "name", header: t("groupsPage.group"), cell: (g) => g.name, sortValue: (g) => g.name },
+    { id: "description", header: t("groupsPage.description"), cell: (g) => g.description || <span className="text-fg-muted">none</span> },
+    { id: "members", header: t("groupsPage.members"), width: "100px", align: "right", cell: (g) => g.members, sortValue: (g) => g.members },
+    { id: "source", header: t("groupsPage.membersFrom"), width: "200px", cell: (g) => (g.syncedFrom ? <Badge tone="info">{g.syncedFrom}</Badge> : "Chosen here") },
     {
       id: "mfa",
-      header: "Second factor",
+      header: t("groupsPage.secondFactor"),
       width: "160px",
       cell: (g) =>
         can("editor") ? (
           <SelectField
-            aria-label={`Second factor for ${g.name}`}
+            aria-label={t("groupsPage.secondFactorFor", { name: g.name })}
             value={g.mfa}
-            options={MFA_OPTIONS}
+            options={MFA_OPTIONS(t)}
             onChange={(e) => void action.run(() => call(`/api/v1/groups/${g.id}`, { method: "PATCH", body: JSON.stringify({ mfa: e.target.value }) }).then(reload))}
           />
         ) : (
-          MFA_OPTIONS.find((o) => o.value === g.mfa)!.label
+          MFA_OPTIONS(t).find((o) => o.value === g.mfa)!.label
         ),
     },
     ...(can("editor")
@@ -94,11 +97,11 @@ export function GroupsPage({ call }: { call: Call }) {
               <span className="flex gap-1 whitespace-nowrap">
                 {!g.syncedFrom && (
                   <Button size="xs" variant="ghost" icon={<Users />} onClick={() => setEditing(g)}>
-                    Members
+                    {t("groupsPage.members")}
                   </Button>
                 )}
-                <Button size="xs" variant="ghost" icon={<Trash2 />} onClick={() => confirm(`Remove ${g.name}? Its members lose the applications only it gave them.`) && void action.run(() => call(`/api/v1/groups/${g.id}`, { method: "DELETE" }).then(reload))}>
-                  Remove
+                <Button size="xs" variant="ghost" icon={<Trash2 />} onClick={() => confirm(t("groupsPage.removeItsMembersLoseThe", { name: g.name })) && void action.run(() => call(`/api/v1/groups/${g.id}`, { method: "DELETE" }).then(reload))}>
+                  {t("groupsPage.remove")}
                 </Button>
               </span>
             ),
@@ -110,12 +113,12 @@ export function GroupsPage({ call }: { call: Call }) {
   return (
     <>
       <PageHeader
-        title="Groups"
-        description="Groups decide who may sign in to which application, and applications receive them to give people roles. Where a second factor is required, members sign in to applications with an authenticator app, a passkey or an identity provider."
+        title={t("groupsPage.groups")}
+        description={t("groupsPage.groupsDecideWhoMaySign")}
         actions={
           can("editor") && (
             <Button variant="primary" icon={<Plus />} onClick={() => setAdding(true)}>
-              Add group
+              {t("groupsPage.addGroup")}
             </Button>
           )
         }
@@ -123,29 +126,29 @@ export function GroupsPage({ call }: { call: Call }) {
       <Dialog
         open={adding}
         onOpenChange={(open) => !open && close()}
-        title="Add a group"
-        description="Then choose its members, and which applications it may sign in to."
+        title={t("groupsPage.addAGroup")}
+        description={t("groupsPage.thenChooseItsMembersAnd")}
         onSubmit={add}
         footer={
           <>
             <Button type="button" onClick={close}>
-              Cancel
+              {t("groupsPage.cancel")}
             </Button>
             <Button type="submit" variant="primary" loading={action.busy} disabled={!name.trim()}>
-              Add group
+              {t("groupsPage.addGroup")}
             </Button>
           </>
         }
       >
-        <Problem error={action.error} title="Not added" />
-        <TextField label="Name" placeholder="Engineering" value={name} onChange={(e) => setName(e.target.value)} />
-        <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-        <SelectField label="Second factor" value={mfa} options={MFA_OPTIONS} onChange={(e) => setMfa(e.target.value as Group["mfa"])} />
+        <Problem error={action.error} title={t("groupsPage.notAdded")} />
+        <TextField label={t("groupsPage.name")} placeholder={t("groupsPage.engineering")} value={name} onChange={(e) => setName(e.target.value)} />
+        <TextField label={t("groupsPage.description")} value={description} onChange={(e) => setDescription(e.target.value)} />
+        <SelectField label={t("groupsPage.secondFactor")} value={mfa} options={MFA_OPTIONS(t)} onChange={(e) => setMfa(e.target.value as Group["mfa"])} />
         <TextField
-          label="Members from a provider"
+          label={t("groupsPage.membersFromAProvider")}
           mono
           placeholder="keycloak:ops-admins"
-          hint="Optional: <provider id>:<group there>. Members then follow that group at each sign-in."
+          hint={t("groupsPage.optionalProviderIdGroupThere")}
           value={syncedFrom}
           onChange={(e) => setSyncedFrom(e.target.value)}
         />
@@ -153,7 +156,7 @@ export function GroupsPage({ call }: { call: Call }) {
       {editing && people.data && <Members key={editing.id} call={call} group={editing} people={people.data.people} onDone={() => (setEditing(undefined), reload(), people.reload())} />}
       {!adding && <Problem error={action.error} />}
       <Panel flush>
-        <List label="Groups" rows={data?.groups} columns={columns} empty="No groups yet" getRowId={(g) => g.id} />
+        <List label={t("groupsPage.groups")} rows={data?.groups} columns={columns} empty={t("groupsPage.noGroupsYet")} getRowId={(g) => g.id} />
       </Panel>
     </>
   );

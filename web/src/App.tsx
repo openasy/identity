@@ -10,6 +10,7 @@ import { AuditPage, OverviewPage } from "./overview.tsx";
 import { PeoplePage } from "./people.tsx";
 import { ProvisioningPage } from "./provisioning.tsx";
 import { useApi } from "./shared.tsx";
+import { useT } from "./i18n.ts";
 
 export const PAGES = ["overview", "applications", "people", "groups", "audit", "account", "members", "signin", "provisioning", "directories", "tokens"] as const;
 type Page = (typeof PAGES)[number];
@@ -49,6 +50,7 @@ function keepReturn() {
 keepReturn();
 
 function Product() {
+  const t = useT();
   const [theme, setTheme] = useThemePreference();
   const { me, can, signOut } = useAuth();
   const call = useApi();
@@ -83,24 +85,24 @@ function Product() {
   const shown: Page = waitForFactor || !manages ? "account" : page;
   const nav = manages
     ? [
-        { id: "overview", label: "Overview", icon: LayoutDashboard },
-        { id: "applications", label: "Applications", icon: AppWindow },
-        { id: "people", label: "People", icon: UsersRound },
-        { id: "groups", label: "Groups", icon: Users },
-        { id: "audit", label: "Audit log", icon: ScrollText },
+        { id: "overview", label: t("product.overview"), icon: LayoutDashboard },
+        { id: "applications", label: t("product.applications"), icon: AppWindow },
+        { id: "people", label: t("product.people"), icon: UsersRound },
+        { id: "groups", label: t("product.groups"), icon: Users },
+        { id: "audit", label: t("product.auditLog"), icon: ScrollText },
       ]
     : [];
   const footerNav = [
     ...(can("admin")
       ? [
-          { id: "members", label: "Members", icon: Users },
-          { id: "signin", label: "Sign-in", icon: LogIn },
-          { id: "provisioning", label: "Provisioning", icon: RefreshCw },
-          { id: "directories", label: "Directories", icon: FolderTree },
-          { id: "tokens", label: "API tokens", icon: KeyRound },
+          { id: "members", label: t("product.members"), icon: Users },
+          { id: "signin", label: t("product.signIn"), icon: LogIn },
+          { id: "provisioning", label: t("product.provisioning"), icon: RefreshCw },
+          { id: "directories", label: t("product.directories"), icon: FolderTree },
+          { id: "tokens", label: t("product.apiTokens"), icon: KeyRound },
         ]
       : []),
-    { id: "account", label: "Account", icon: UserRound },
+    { id: "account", label: t("product.account"), icon: UserRound },
   ];
   const roleName = me.user.role.charAt(0).toUpperCase() + me.user.role.slice(1);
 
@@ -131,34 +133,34 @@ function Product() {
       ) : shown === "groups" ? (
         <GroupsPage call={call} />
       ) : shown === "directories" ? (
-        can("admin") ? <DirectoriesPage call={call} /> : <EmptyState title="Admins only">Ask an admin of this Identity for access.</EmptyState>
+        can("admin") ? <DirectoriesPage call={call} /> : <EmptyState title={t("product.adminsOnly")}>{t("product.askAnAdminOfThis")}</EmptyState>
       ) : shown === "provisioning" ? (
-        can("admin") ? <ProvisioningPage call={call} /> : <EmptyState title="Admins only">Ask an admin of this Identity for access.</EmptyState>
+        can("admin") ? <ProvisioningPage call={call} /> : <EmptyState title={t("product.adminsOnly")}>{t("product.askAnAdminOfThis")}</EmptyState>
       ) : shown !== "account" && !can("admin") ? (
-        <EmptyState title="Admins only">Ask an admin of this Identity for access.</EmptyState>
+        <EmptyState title={t("product.adminsOnly")}>{t("product.askAnAdminOfThis")}</EmptyState>
       ) : (
         <>
           <PageHeader
-            title={manages ? SETTINGS[shown][0] : "Your account"}
-            description={manages ? SETTINGS[shown][1] : "You sign in to your applications with this account. Keep a second factor here: an authenticator app or a passkey."}
+            title={manages ? SETTINGS[shown][0] : t("product.yourAccount")}
+            description={manages ? SETTINGS[shown][1] : t("product.youSignInToYour")}
             actions={
               shown === "account" && (
                 <Button icon={<LogOut />} onClick={() => void signOut()}>
-                  Sign out
+                  {t("product.signOut")}
                 </Button>
               )
             }
           />
           {waitForFactor && (
-            <Callout tone="warning" title={asked === "passkey" ? "Use a passkey to continue" : "Add a second factor to continue"} className="mb-3">
+            <Callout tone="warning" title={asked === "passkey" ? t("product.useAPasskeyToContinue") : t("product.addASecondFactorTo")} className="mb-3">
               <span className="flex flex-col items-start gap-2">
                 <span>
                   {asked === "passkey"
-                    ? "The application you are signing in to accepts only a passkey. Add one below, or sign out and sign in again with yours, then continue."
-                    : "The application you are signing in to asks for one. Add an authenticator app or a passkey below, then continue."}
+                    ? t("product.theApplicationYouAreSigning")
+                    : t("product.theApplicationYouAreSigning2")}
                 </span>
                 <Button variant="primary" iconRight={<ArrowRight />} onClick={continueToApp}>
-                  Continue to the application
+                  {t("product.continueToTheApplication")}
                 </Button>
               </span>
             </Callout>

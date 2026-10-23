@@ -3,6 +3,7 @@ import { useAuth } from "@openasy/auth/react";
 import { Copy } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api, MfaSetupRequired, Unauthorized } from "./api.ts";
+import { useT } from "./i18n.ts";
 
 /** Data loading with the session; when it ends, the sign-in screen comes back. */
 export function useApi() {
@@ -66,15 +67,6 @@ export function useAction() {
   return { run, busy, error, clear: () => setError(undefined) };
 }
 
-export function ago(iso: string | null | undefined): string {
-  if (!iso) return "never";
-  const s = Math.round((Date.now() - Date.parse(iso)) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86_400) return `${Math.round(s / 3600)} h ago`;
-  return `${Math.round(s / 86_400)} d ago`;
-}
-
 export const date = (iso: string) => new Date(iso).toLocaleDateString();
 
 export function Problem({ error, title = "That did not work" }: { error?: string; title?: string }) {
@@ -92,6 +84,7 @@ export function List<T>({ label, rows, columns, empty, getRowId, onRowClick }: {
 
 /** Commands to copy onto a host. */
 export function Code({ children, label }: { children: string; label: string }) {
+  const t = useT();
   return (
     <div className="flex flex-col gap-1.5">
       <pre tabIndex={0} aria-label={label} className="identity-code">
@@ -99,7 +92,7 @@ export function Code({ children, label }: { children: string; label: string }) {
       </pre>
       <div>
         <Button size="xs" icon={<Copy />} onClick={() => void navigator.clipboard?.writeText(children)}>
-          Copy
+          {t("code.copy")}
         </Button>
       </div>
     </div>
