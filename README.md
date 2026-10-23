@@ -52,7 +52,7 @@ are on http://localhost:8080; the API reference is at http://localhost:8080/api/
 | `OPENASY_PRODUCTS` | | The install's other OpenAsy products, for the product switcher: `vpn=https://vpn.example.com,infrastructure=https://infra.example.com`. Give every product the same value |
 | `IDENTITY_SECRETS_KEY_FILE` | `/run/secrets/openasy-kek` | 32-byte key-encryption key; required |
 | `IDENTITY_PASSWORD_SIGN_IN` | `true` | `false` when the people who manage Identity sign in through another provider |
-| `IDENTITY_OIDC_*` | | Sign in to Identity itself through another provider, as in every OpenAsy product; owners can also add providers under Settings, Sign-in |
+| `OPENASY_OIDC_*` | | Sign in to Identity itself through another provider, as in every OpenAsy product; owners can also add providers under Settings, Sign-in |
 | `IDENTITY_HEADLESS` | `false` | `true` serves only the API |
 
 ## Sign-in
@@ -66,7 +66,7 @@ an authenticator app or a passkey.
 
 **An OpenAsy product:** under Applications, choose it, enter the address people open it at and the groups that may
 use it. Then, in the product, open Settings, Sign-in, add a provider, choose OpenAsy Identity and enter the issuer,
-client ID and secret Identity shows; or set its `<P>OIDC_*` variables, also shown. Map Identity groups to the
+client ID and secret Identity shows; or set its `OPENASY_OIDC_*` variables, also shown. Map Identity groups to the
 product's roles there, for example `Engineering = admin`.
 
 **Any other application:** choose Another application, give its redirect URIs, and set it up with the issuer, client

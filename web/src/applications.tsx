@@ -5,10 +5,10 @@ import { useState, type FormEvent } from "react";
 import type { Application, ApplicationSecret, Group } from "./api.ts";
 import { Code, List, Problem, useAction, useData, type Call } from "./shared.tsx";
 
-const TEMPLATES: Record<Application["template"], { label: string; product?: string; prefix?: string; saml?: true }> = {
-  "openasy-vpn": { label: "OpenAsy VPN", product: "VPN", prefix: "VPN_" },
-  "openasy-infrastructure": { label: "OpenAsy Infrastructure", product: "Infrastructure", prefix: "INFRA_" },
-  "openasy-vulnerabilities": { label: "OpenAsy Vulnerabilities", product: "Vulnerabilities", prefix: "VULNS_" },
+const TEMPLATES: Record<Application["template"], { label: string; product?: string; saml?: true }> = {
+  "openasy-vpn": { label: "OpenAsy VPN", product: "VPN" },
+  "openasy-infrastructure": { label: "OpenAsy Infrastructure", product: "Infrastructure" },
+  "openasy-vulnerabilities": { label: "OpenAsy Vulnerabilities", product: "Vulnerabilities" },
   oidc: { label: "Another application (OpenID Connect)" },
   aws: { label: "AWS IAM Identity Center (SAML)", saml: true },
   saml: { label: "Another application (SAML 2.0)", saml: true },
@@ -58,12 +58,12 @@ function Created({ created, issuer, onDone }: { created: ApplicationSecret; issu
     >
       <span className="flex flex-col gap-2">
         <Code label={`Settings for ${a.name}`}>{`Issuer         ${issuer}\nClient ID      ${a.id}\nClient secret  ${clientSecret}`}</Code>
-        {t.prefix ? (
+        {t.product ? (
           <>
             <span>
               In {t.product}, open Settings, Sign-in, add a provider and choose OpenAsy Identity, then enter these. Or set them in its environment and restart it:
             </span>
-            <Code label={`Environment for ${a.name}`}>{`${t.prefix}OIDC_PROVIDER=openasy-identity\n${t.prefix}OIDC_ISSUER=${issuer}\n${t.prefix}OIDC_CLIENT_ID=${a.id}\n${t.prefix}OIDC_CLIENT_SECRET=${clientSecret}\n# groups in Identity to roles in ${t.product}\n${t.prefix}OIDC_ROLE_MAPPING=${a.groups[0] ?? "Engineering"}=admin`}</Code>
+            <Code label={`Environment for ${a.name}`}>{`OPENASY_OIDC_PROVIDER=openasy-identity\nOPENASY_OIDC_ISSUER=${issuer}\nOPENASY_OIDC_CLIENT_ID=${a.id}\nOPENASY_OIDC_CLIENT_SECRET=${clientSecret}\n# groups in Identity to roles in ${t.product}\nOPENASY_OIDC_ROLE_MAPPING=${a.groups[0] ?? "Engineering"}=admin`}</Code>
           </>
         ) : (
           <span>Set the application up with them; it must send PKCE (S256), and asks for the scopes openid, email, profile and groups.</span>
