@@ -11,11 +11,11 @@ services:
     restart: unless-stopped
     read_only: true
     ports:
-      - "127.0.0.1:8080:8080"   # UI, API and OpenID provider; put a TLS proxy in front to reach it from elsewhere
+      - "127.0.0.1:8080:8080" # UI, API and OpenID provider; put a TLS proxy in front to reach it from elsewhere
     volumes:
-      - identity-data:/data   # SQLite database
+      - identity-data:/data # SQLite database
     secrets:
-      - openasy-kek   # mounted at /run/secrets/openasy-kek
+      - openasy-kek # mounted at /run/secrets/openasy-kek
     environment:
       # The address people and applications open Identity at; with a TLS proxy in front, its https:// URL. It is the
       # OpenID issuer: applications stop trusting tokens if it changes.

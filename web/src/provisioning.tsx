@@ -21,11 +21,15 @@ export function ProvisioningPage({ call }: { call: Call }) {
   const on = !!data?.tokenCreatedAt;
   return (
     <>
-      <PageHeader
-        title={t("provisioningPage.provisioning")}
-        description={t("provisioningPage.oktaMicrosoftEntraIdAnd")}
-      />
-      <Panel title="SCIM" description={on ? t("provisioningPage.onSinceLastRequest", { value: new Date(data!.tokenCreatedAt!).toLocaleDateString(), ago: ago(data!.lastUsedAt) }) : t("provisioningPage.offMakeATokenTo")}>
+      <PageHeader title={t("provisioningPage.provisioning")} description={t("provisioningPage.oktaMicrosoftEntraIdAnd")} />
+      <Panel
+        title="SCIM"
+        description={
+          on
+            ? t("provisioningPage.onSinceLastRequest", { value: new Date(data!.tokenCreatedAt!).toLocaleDateString(), ago: ago(data!.lastUsedAt) })
+            : t("provisioningPage.offMakeATokenTo")
+        }
+      >
         <div className="flex flex-col gap-3">
           {data && <Code label={t("provisioningPage.scimBaseUrl")}>{data.url}</Code>}
           <span className="flex gap-2">
@@ -41,7 +45,14 @@ export function ProvisioningPage({ call }: { call: Call }) {
               {on ? t("provisioningPage.newToken") : t("provisioningPage.makeAToken")}
             </Button>
             {on && (
-              <Button variant="ghost" icon={<Power />} onClick={() => confirm(t("provisioningPage.turnScimOffTheProvider")) && void action.run(() => call("/api/v1/provisioning/token", { method: "DELETE" }).then(() => (setToken(undefined), reload())))}>
+              <Button
+                variant="ghost"
+                icon={<Power />}
+                onClick={() =>
+                  confirm(t("provisioningPage.turnScimOffTheProvider")) &&
+                  void action.run(() => call("/api/v1/provisioning/token", { method: "DELETE" }).then(() => (setToken(undefined), reload())))
+                }
+              >
                 {t("provisioningPage.turnOff")}
               </Button>
             )}

@@ -41,12 +41,19 @@ class SqliteAdapter implements Adapter {
         `INSERT INTO oidc_models (model, id, payload, grant_id, uid, user_code, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (model, id) DO UPDATE SET payload = excluded.payload, grant_id = excluded.grant_id, uid = excluded.uid, user_code = excluded.user_code, expires_at = excluded.expires_at`,
       )
-      .run(this.model, id, JSON.stringify(payload), payload.grantId ?? null, payload.uid ?? null, payload.userCode ?? null, expiresIn ? epoch() + expiresIn : null);
+      .run(
+        this.model,
+        id,
+        JSON.stringify(payload),
+        payload.grantId ?? null,
+        payload.uid ?? null,
+        payload.userCode ?? null,
+        expiresIn ? epoch() + expiresIn : null,
+      );
   }
   private row(where: string, value: string): AdapterPayload | undefined {
     const r = this.db.prepare(`SELECT payload, expires_at, consumed_at FROM oidc_models WHERE model = ? AND ${where} = ?`).get(this.model, value) as
-      | { payload: string; expires_at: number | null; consumed_at: number | null }
-      | undefined;
+      { payload: string; expires_at: number | null; consumed_at: number | null } | undefined;
     if (!r || (r.expires_at !== null && r.expires_at < epoch())) return undefined;
     return { ...(JSON.parse(r.payload) as AdapterPayload), ...(r.consumed_at !== null && { consumed: r.consumed_at }) };
   }
@@ -120,7 +127,9 @@ export function createOidc({ db, keyring, directory, auth, audit, issuer }: Oidc
   const signedIn = (req: IncomingMessage): Session | undefined => {
     try {
       const p = auth.authorize(req, "user");
-      return p.kind === "session" ? { id: p.user.id, strong: p.mfa || p.method === "passkey" || p.method.startsWith("oidc:"), passkey: p.factor === "passkey" } : undefined;
+      return p.kind === "session"
+        ? { id: p.user.id, strong: p.mfa || p.method === "passkey" || p.method.startsWith("oidc:"), passkey: p.factor === "passkey" }
+        : undefined;
     } catch {
       return undefined;
     }
@@ -143,7 +152,8 @@ export function createOidc({ db, keyring, directory, auth, audit, issuer }: Oidc
       return !accountId || s?.id !== accountId || missing(s) ? interactionPolicy.Check.REQUEST_PROMPT : interactionPolicy.Check.NO_NEED_TO_PROMPT;
     }),
   );
-  const refused = (application: string, actor: string, detail: string, ip?: string) => audit.record({ type: "app-sign-in-refused", application, actor, detail, ip });
+  const refused = (application: string, actor: string, detail: string, ip?: string) =>
+    audit.record({ type: "app-sign-in-refused", application, actor, detail, ip });
 
   const provider = new Provider(issuer, {
     adapter: (name: string) => (name === "Client" ? new ClientAdapter(db, directory) : new SqliteAdapter(name, db)),
@@ -211,7 +221,8 @@ export function createOidc({ db, keyring, directory, auth, audit, issuer }: Oidc
   provider.on("server_error", (_ctx, err) => log("error", "openid provider", { error: String(err) }));
   // A code exchanged for tokens: someone signed in to an application.
   provider.on("grant.success", (ctx) => {
-    if (ctx.oidc.params?.grant_type === "authorization_code") audit.record({ type: "app-sign-in", application: ctx.oidc.client?.clientId, actor: ctx.oidc.entities.AuthorizationCode?.accountId, ip: ctx.ip });
+    if (ctx.oidc.params?.grant_type === "authorization_code")
+      audit.record({ type: "app-sign-in", application: ctx.oidc.client?.clientId, actor: ctx.oidc.entities.AuthorizationCode?.accountId, ip: ctx.ip });
   });
 
   const handler = provider.callback();
@@ -235,7 +246,12 @@ export function createOidc({ db, keyring, directory, auth, audit, issuer }: Oidc
     const clientId = String(details.params.client_id);
     if (!directory.mayUse(clientId, s.id)) {
       refused(clientId, s.id, "not in its groups", clientIpOf(req));
-      await provider.interactionFinished(req, res, { error: "access_denied", error_description: "You may not use this application. Ask an admin to add you to one of its groups." }, { mergeWithLastSubmission: false });
+      await provider.interactionFinished(
+        req,
+        res,
+        { error: "access_denied", error_description: "You may not use this application. Ask an admin to add you to one of its groups." },
+        { mergeWithLastSubmission: false },
+      );
       return;
     }
     // Their groups ask for a second factor or a passkey: they add it, or sign in again with it, and come back here.

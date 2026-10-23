@@ -21,9 +21,14 @@ beforeAll(async () => {
   const created = await owner.json<{ application: { protocol: string; saml: unknown }; clientSecret: string | null }>("/api/v1/applications", {
     body: { name: "Jira", template: "saml", entityId: SP.entityID, acsUrl: SP.acs, groups: ["Engineering"] },
   });
-  expect(created.body).toMatchObject({ application: { protocol: "saml", saml: { entityId: SP.entityID, acsUrl: SP.acs, nameId: "email" } }, clientSecret: null });
+  expect(created.body).toMatchObject({
+    application: { protocol: "saml", saml: { entityId: SP.entityID, acsUrl: SP.acs, nameId: "email" } },
+    clientSecret: null,
+  });
 
-  const invited = await owner.json<{ member: { id: string }; link: string }>("/api/v1/auth/members", { body: { email: "uma@example.com", name: "Uma Ito", role: "user" } });
+  const invited = await owner.json<{ member: { id: string }; link: string }>("/api/v1/auth/members", {
+    body: { email: "uma@example.com", name: "Uma Ito", role: "user" },
+  });
   uma = new Browser(app.base);
   await uma.json(`/api/v1/auth/links/${new URL(invited.body.link).searchParams.get("link")}`, { body: { password: PASSWORD } });
   await owner.json(`/api/v1/groups/${group.id}/members`, { method: "PUT", body: { userIds: [invited.body.member.id] } });

@@ -32,7 +32,9 @@ try {
   process.exit(1);
 }
 if (!kek) {
-  log("error", "no key-encryption key: mount 32 random bytes (openssl rand -hex 32) and set IDENTITY_SECRETS_KEY_FILE if not at the default", { file: secretsKeyFile });
+  log("error", "no key-encryption key: mount 32 random bytes (openssl rand -hex 32) and set IDENTITY_SECRETS_KEY_FILE if not at the default", {
+    file: secretsKeyFile,
+  });
   process.exit(1);
 }
 
@@ -85,7 +87,11 @@ const server = createServer(
 
 server.listen(port, () => log("info", "identity started", { version, port, db: dbPath, headless }));
 if (!publicUrl.startsWith("https://") && !/^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(publicUrl)) {
-  log("warn", "IDENTITY_PUBLIC_URL is not https: browsers will not keep secure cookies or allow passkeys, and applications refuse an http issuer. Put Identity behind TLS (ADR 0026)", { url: publicUrl });
+  log(
+    "warn",
+    "IDENTITY_PUBLIC_URL is not https: browsers will not keep secure cookies or allow passkeys, and applications refuse an http issuer. Put Identity behind TLS (ADR 0026)",
+    { url: publicUrl },
+  );
 }
 const setup = auth.setupLink();
 // No default password (ADR 0013): the first person to open this link becomes the owner.

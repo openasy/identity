@@ -23,7 +23,12 @@ export const DIRECTORY_DEFAULTS: Record<DirectoryKind, { userFilter: string; ema
     nameAttribute: "displayName",
     groupFilter: "(objectClass=group)",
   },
-  ldap: { userFilter: "(&(objectClass=inetOrgPerson)(mail=*))", emailAttribute: "mail", nameAttribute: "cn", groupFilter: "(|(objectClass=groupOfNames)(objectClass=groupOfUniqueNames))" },
+  ldap: {
+    userFilter: "(&(objectClass=inetOrgPerson)(mail=*))",
+    emailAttribute: "mail",
+    nameAttribute: "cn",
+    groupFilter: "(|(objectClass=groupOfNames)(objectClass=groupOfUniqueNames))",
+  },
 };
 
 export interface Directory {
@@ -74,7 +79,8 @@ const first = (v: Entry[string] | undefined): string | undefined => {
   const x = Array.isArray(v) ? v[0] : v;
   return x === undefined ? undefined : Buffer.isBuffer(x) ? x.toString("utf8") : String(x);
 };
-const all = (v: Entry[string] | undefined): string[] => (v === undefined ? [] : (Array.isArray(v) ? v : [v]).map((x) => (Buffer.isBuffer(x) ? x.toString("utf8") : String(x))));
+const all = (v: Entry[string] | undefined): string[] =>
+  v === undefined ? [] : (Array.isArray(v) ? v : [v]).map((x) => (Buffer.isBuffer(x) ? x.toString("utf8") : String(x)));
 /** DNs compare without case and spaces after commas, as directories write them differently. */
 const dnKey = (dn: string) => dn.toLowerCase().replace(/,\s+/g, ",");
 
@@ -120,7 +126,8 @@ export function createDirectories({ db, keyring, audit }: { db: DatabaseSync; ke
       if (typeof v !== "string" || !v.trim() || v.length > max) throw invalid(`${name} must be text, at most ${max} characters.`);
       return v.trim();
     };
-    const optional = (name: string, fallback: string | null) => (b[name] === undefined ? fallback : b[name] === null || b[name] === "" ? null : text(name, 4096));
+    const optional = (name: string, fallback: string | null) =>
+      b[name] === undefined ? fallback : b[name] === null || b[name] === "" ? null : text(name, 4096);
     const kind = (b.kind ?? current?.kind ?? "active-directory") as DirectoryKind;
     if (!(kind in DIRECTORY_DEFAULTS)) throw invalid('kind must be "active-directory" or "ldap".');
     const d = DIRECTORY_DEFAULTS[kind];
@@ -128,7 +135,8 @@ export function createDirectories({ db, keyring, audit }: { db: DatabaseSync; ke
     if (!/^ldaps?:\/\/[^\s/]+(:\d+)?\/?$/.test(url)) throw invalid("url is ldaps://host:636 or ldap://host:389.");
     const startTls = b.startTls === undefined ? current?.start_tls === 1 : b.startTls === true;
     // A password sent in the clear would be readable on the network: plain ldap:// needs StartTLS, except in tests.
-    if (url.startsWith("ldap://") && !startTls && !/^ldap:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(url)) throw invalid("Use ldaps://, or ldap:// with StartTLS: passwords must not cross the network in the clear.");
+    if (url.startsWith("ldap://") && !startTls && !/^ldap:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(url))
+      throw invalid("Use ldaps://, or ldap:// with StartTLS: passwords must not cross the network in the clear.");
     const syncMinutes = b.syncMinutes === undefined ? (current?.sync_minutes ?? 60) : Number(b.syncMinutes);
     if (!Number.isInteger(syncMinutes) || syncMinutes < 5 || syncMinutes > 1440) throw invalid("syncMinutes is a whole number from 5 to 1440.");
     const password = b.bindPassword === undefined ? current?.bind_password : keyring.seal(text("bindPassword", 1024));
@@ -158,7 +166,24 @@ export function createDirectories({ db, keyring, audit }: { db: DatabaseSync; ke
     db.prepare(
       `INSERT INTO directories (id, name, kind, url, start_tls, ca_cert, bind_dn, bind_password, base_dn, user_filter, email_attribute, name_attribute, group_base_dn, group_filter, sync_minutes, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(id, v.name, v.kind, v.url, v.startTls ? 1 : 0, v.caCert, v.bindDn, v.bindPassword, v.baseDn, v.userFilter, v.emailAttribute, v.nameAttribute, v.groupBaseDn, v.groupFilter, v.syncMinutes, now());
+    ).run(
+      id,
+      v.name,
+      v.kind,
+      v.url,
+      v.startTls ? 1 : 0,
+      v.caCert,
+      v.bindDn,
+      v.bindPassword,
+      v.baseDn,
+      v.userFilter,
+      v.emailAttribute,
+      v.nameAttribute,
+      v.groupBaseDn,
+      v.groupFilter,
+      v.syncMinutes,
+      now(),
+    );
     return toDirectory(requireRow(id));
   }
 
@@ -167,7 +192,23 @@ export function createDirectories({ db, keyring, audit }: { db: DatabaseSync; ke
     db.prepare(
       `UPDATE directories SET name = ?, kind = ?, url = ?, start_tls = ?, ca_cert = ?, bind_dn = ?, bind_password = ?, base_dn = ?, user_filter = ?, email_attribute = ?, name_attribute = ?,
        group_base_dn = ?, group_filter = ?, sync_minutes = ? WHERE id = ?`,
-    ).run(v.name, v.kind, v.url, v.startTls ? 1 : 0, v.caCert, v.bindDn, v.bindPassword, v.baseDn, v.userFilter, v.emailAttribute, v.nameAttribute, v.groupBaseDn, v.groupFilter, v.syncMinutes, id);
+    ).run(
+      v.name,
+      v.kind,
+      v.url,
+      v.startTls ? 1 : 0,
+      v.caCert,
+      v.bindDn,
+      v.bindPassword,
+      v.baseDn,
+      v.userFilter,
+      v.emailAttribute,
+      v.nameAttribute,
+      v.groupBaseDn,
+      v.groupFilter,
+      v.syncMinutes,
+      id,
+    );
     return toDirectory(requireRow(id));
   }
 
@@ -220,7 +261,10 @@ export function createDirectories({ db, keyring, audit }: { db: DatabaseSync; ke
     try {
       return await withService(r, async (c) => {
         const people = await searchPeople(c, r);
-        const groups = r.group_filter ? (await c.search(r.group_base_dn ?? r.base_dn, { scope: "sub", filter: r.group_filter, attributes: ["cn"], paged: { pageSize: 500 } })).searchEntries.length : 0;
+        const groups = r.group_filter
+          ? (await c.search(r.group_base_dn ?? r.base_dn, { scope: "sub", filter: r.group_filter, attributes: ["cn"], paged: { pageSize: 500 } })).searchEntries
+              .length
+          : 0;
         return { ok: true as const, people: people.length, groups };
       });
     } catch (err) {
@@ -248,21 +292,38 @@ export function createDirectories({ db, keyring, audit }: { db: DatabaseSync; ke
         db.exec("BEGIN IMMEDIATE");
         try {
           for (const p of people) {
-            const linked = db.prepare("SELECT user_id FROM directory_users WHERE directory_id = ? AND dn = ? COLLATE NOCASE").get(r.id, p.dn) as { user_id: string } | undefined;
+            const linked = db.prepare("SELECT user_id FROM directory_users WHERE directory_id = ? AND dn = ? COLLATE NOCASE").get(r.id, p.dn) as
+              { user_id: string } | undefined;
             const byEmail = db.prepare("SELECT id, role FROM auth_users WHERE email = ?").get(p.email) as { id: string; role: string } | undefined;
             // The people who manage Identity keep their own sign-in, even when the directory has them too.
             if (byEmail && byEmail.role !== "user") continue;
             const otherDirectory = byEmail && db.prepare("SELECT 1 FROM directory_users WHERE user_id = ? AND directory_id != ?").get(byEmail.id, r.id);
             if (otherDirectory) continue;
             const userId = linked?.user_id ?? byEmail?.id ?? randomUUID();
-            if (!linked && !byEmail) db.prepare("INSERT INTO auth_users (id, email, name, role, status, created_at) VALUES (?, ?, ?, 'user', 'active', ?)").run(userId, p.email, p.name, at);
-            db.prepare("UPDATE auth_users SET email = ?, name = ?, status = ?, password_hash = NULL WHERE id = ? AND role = 'user'").run(p.email, p.name, p.disabled ? "disabled" : "active", userId);
+            if (!linked && !byEmail)
+              db.prepare("INSERT INTO auth_users (id, email, name, role, status, created_at) VALUES (?, ?, ?, 'user', 'active', ?)").run(
+                userId,
+                p.email,
+                p.name,
+                at,
+              );
+            db.prepare("UPDATE auth_users SET email = ?, name = ?, status = ?, password_hash = NULL WHERE id = ? AND role = 'user'").run(
+              p.email,
+              p.name,
+              p.disabled ? "disabled" : "active",
+              userId,
+            );
             if (p.disabled) (disable(userId), disabled++);
-            db.prepare("INSERT INTO directory_users (user_id, directory_id, dn, seen_at) VALUES (?, ?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET dn = excluded.dn, seen_at = excluded.seen_at").run(userId, r.id, p.dn, at);
+            db.prepare(
+              "INSERT INTO directory_users (user_id, directory_id, dn, seen_at) VALUES (?, ?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET dn = excluded.dn, seen_at = excluded.seen_at",
+            ).run(userId, r.id, p.dn, at);
             byDn.set(dnKey(p.dn), userId);
           }
           // Gone from the directory, or out of the filter: turned off, not deleted, so their history stays.
-          for (const gone of db.prepare("SELECT user_id FROM directory_users WHERE directory_id = ? AND seen_at < ?").all(r.id, at) as Array<{ user_id: string }>) (disable(gone.user_id), disabled++);
+          for (const gone of db.prepare("SELECT user_id FROM directory_users WHERE directory_id = ? AND seen_at < ?").all(r.id, at) as Array<{
+            user_id: string;
+          }>)
+            (disable(gone.user_id), disabled++);
           db.exec("COMMIT");
         } catch (err) {
           db.exec("ROLLBACK");
@@ -271,7 +332,12 @@ export function createDirectories({ db, keyring, audit }: { db: DatabaseSync; ke
 
         let groups = 0;
         if (r.group_filter) {
-          const { searchEntries } = await c.search(r.group_base_dn ?? r.base_dn, { scope: "sub", filter: r.group_filter, attributes: ["cn", "member", "uniqueMember"], paged: { pageSize: 500 } });
+          const { searchEntries } = await c.search(r.group_base_dn ?? r.base_dn, {
+            scope: "sub",
+            filter: r.group_filter,
+            attributes: ["cn", "member", "uniqueMember"],
+            paged: { pageSize: 500 },
+          });
           db.exec("BEGIN IMMEDIATE");
           try {
             const seen = new Set<string>();
@@ -285,7 +351,13 @@ export function createDirectories({ db, keyring, audit }: { db: DatabaseSync; ke
                 groupId = randomUUID();
                 // A group of the same name made here keeps its name; this one is told apart by the directory's.
                 const name = db.prepare("SELECT 1 FROM groups WHERE name = ?").get(cn) ? `${cn} (${r.name})` : cn;
-                db.prepare("INSERT INTO groups (id, name, description, synced_from, created_at) VALUES (?, ?, ?, ?, ?)").run(groupId, name, `From ${r.name}`, key, now());
+                db.prepare("INSERT INTO groups (id, name, description, synced_from, created_at) VALUES (?, ?, ?, ?, ?)").run(
+                  groupId,
+                  name,
+                  `From ${r.name}`,
+                  key,
+                  now(),
+                );
               }
               const members = [...all(g.member), ...all(g.uniqueMember)].map((dn) => byDn.get(dnKey(dn))).filter((u): u is string => !!u);
               db.prepare("DELETE FROM group_members WHERE group_id = ?").run(groupId);
@@ -293,7 +365,10 @@ export function createDirectories({ db, keyring, audit }: { db: DatabaseSync; ke
               groups++;
             }
             // Groups no longer in the directory, or out of the filter, go.
-            for (const g of db.prepare("SELECT id, synced_from FROM groups WHERE synced_from LIKE ?").all(`${r.id}:%`) as Array<{ id: string; synced_from: string }>) {
+            for (const g of db.prepare("SELECT id, synced_from FROM groups WHERE synced_from LIKE ?").all(`${r.id}:%`) as Array<{
+              id: string;
+              synced_from: string;
+            }>) {
               if (!seen.has(g.synced_from)) db.prepare("DELETE FROM groups WHERE id = ?").run(g.id);
             }
             db.exec("COMMIT");
@@ -305,7 +380,12 @@ export function createDirectories({ db, keyring, audit }: { db: DatabaseSync; ke
         return { people: byDn.size, groups, disabled };
       });
       db.prepare("UPDATE directories SET last_sync_at = ?, last_error = NULL, last_counts = ? WHERE id = ?").run(now(), JSON.stringify(counts), id);
-      audit.record({ type: "directory-synced", actor: "directory", target: id, detail: `${r.name}: ${counts.people} people, ${counts.groups} groups, ${counts.disabled} turned off` });
+      audit.record({
+        type: "directory-synced",
+        actor: "directory",
+        target: id,
+        detail: `${r.name}: ${counts.people} people, ${counts.groups} groups, ${counts.disabled} turned off`,
+      });
       return { ok: true as const, ...counts };
     } catch (err) {
       const error = (err as Error).message;
@@ -327,12 +407,16 @@ export function createDirectories({ db, keyring, audit }: { db: DatabaseSync; ke
 
   /** The directory that keeps someone's password, by name, for @openasy/auth's externalPasswords. */
   const managedBy = (userId: string) =>
-    (db.prepare("SELECT d.name FROM directory_users u JOIN directories d ON d.id = u.directory_id WHERE u.user_id = ?").get(userId) as { name: string } | undefined)?.name;
+    (
+      db.prepare("SELECT d.name FROM directory_users u JOIN directories d ON d.id = u.directory_id WHERE u.user_id = ?").get(userId) as
+        { name: string } | undefined
+    )?.name;
 
   /** Binds as the person: the directory says whether the password is theirs. */
   async function verify(userId: string, password: string): Promise<boolean> {
     if (!password) return false;
-    const r = db.prepare("SELECT d.*, u.dn AS user_dn FROM directory_users u JOIN directories d ON d.id = u.directory_id WHERE u.user_id = ?").get(userId) as (Row & { user_dn: string }) | undefined;
+    const r = db.prepare("SELECT d.*, u.dn AS user_dn FROM directory_users u JOIN directories d ON d.id = u.directory_id WHERE u.user_id = ?").get(userId) as
+      (Row & { user_dn: string }) | undefined;
     if (!r) return false;
     const c = await connect(r);
     try {

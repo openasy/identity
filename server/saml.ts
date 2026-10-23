@@ -65,7 +65,9 @@ function readRequest(encoded: string, deflated: boolean): { id: string; issuer: 
   const doc = new DOMParser().parseFromString(xml, "text/xml");
   const root = doc.documentElement;
   if (!root || root.localName !== "AuthnRequest" || root.namespaceURI !== "urn:oasis:names:tc:SAML:2.0:protocol") throw new Error("not an AuthnRequest");
-  const issuer = Array.from(root.childNodes).find((n) => (n as { localName?: string }).localName === "Issuer")?.textContent?.trim();
+  const issuer = Array.from(root.childNodes)
+    .find((n) => (n as { localName?: string }).localName === "Issuer")
+    ?.textContent?.trim();
   const id = root.getAttribute("ID");
   if (!issuer || !id || !/^[A-Za-z_][\w.-]{0,255}$/.test(id)) throw new Error("the request has no Issuer or ID");
   return { id, issuer };
@@ -134,7 +136,10 @@ export async function createSaml({ db, keyring, directory, audit, issuer, signed
               "{AuthnStatement}",
               `<saml:AuthnStatement AuthnInstant="${iso()}" SessionIndex="${id}"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>`,
             )
-            .replace("{AttributeStatement}", `<saml:AttributeStatement>${attribute("email", [account.email])}${attribute("name", [account.name])}${attribute("groups", account.groups)}</saml:AttributeStatement>`)
+            .replace(
+              "{AttributeStatement}",
+              `<saml:AttributeStatement>${attribute("email", [account.email])}${attribute("name", [account.name])}${attribute("groups", account.groups)}</saml:AttributeStatement>`,
+            )
             .replace(/ InResponseTo="\{InResponseTo\}"/g, requestId ? ` InResponseTo="${esc(requestId)}"` : "")
             .replace(/\{(\w+)\}/g, (_m, tag: string) => {
               const values: Record<string, string> = {
@@ -177,8 +182,7 @@ export async function createSaml({ db, keyring, directory, audit, issuer, signed
   /** Someone signed in, allowed and strong enough continues to the application; anyone else signs in first. */
   async function continueRequest(req: IncomingMessage, res: ServerResponse, pendingId: string) {
     const p = db.prepare("SELECT * FROM saml_requests WHERE id = ? AND expires_at > ?").get(pendingId, new Date().toISOString()) as
-      | { id: string; application_id: string; request_id: string | null; relay_state: string | null }
-      | undefined;
+      { id: string; application_id: string; request_id: string | null; relay_state: string | null } | undefined;
     if (!p) return page(res, 400, "This sign-in expired", "Go back to the application and start again.");
     const back = encodeURIComponent(`${SAML_PREFIX}/continue/${p.id}`);
     const s = signedIn(req);
@@ -189,7 +193,12 @@ export async function createSaml({ db, keyring, directory, audit, issuer, signed
     }
     const need = missing(s);
     if (need) {
-      audit.record({ type: "app-sign-in-refused", application: p.application_id, actor: s.id, detail: need === "passkey" ? "passkey needed" : "second factor needed" });
+      audit.record({
+        type: "app-sign-in-refused",
+        application: p.application_id,
+        actor: s.id,
+        detail: need === "passkey" ? "passkey needed" : "second factor needed",
+      });
       return void res.writeHead(303, { location: `/?return=${back}&mfa=${need}` }).end();
     }
     db.prepare("DELETE FROM saml_requests WHERE id = ?").run(p.id);
@@ -240,7 +249,11 @@ export async function createSaml({ db, keyring, directory, audit, issuer, signed
     })();
     if (!app?.saml) return page(res, 404, "Unknown application", "No SAML application here has this id.");
     const pendingId = randomUUID();
-    db.prepare("INSERT INTO saml_requests (id, application_id, expires_at) VALUES (?, ?, ?)").run(pendingId, appId, new Date(Date.now() + 10 * 60_000).toISOString());
+    db.prepare("INSERT INTO saml_requests (id, application_id, expires_at) VALUES (?, ?, ?)").run(
+      pendingId,
+      appId,
+      new Date(Date.now() + 10 * 60_000).toISOString(),
+    );
     await continueRequest(req, res, pendingId);
   }
 
@@ -255,7 +268,8 @@ export async function createSaml({ db, keyring, directory, audit, issuer, signed
       } else if (path === `${SAML_PREFIX}/certificate` && req.method === "GET") {
         res.writeHead(200, { "content-type": "application/x-pem-file", "content-disposition": 'attachment; filename="openasy-identity-saml.pem"' }).end(cert);
       } else if (path === `${SAML_PREFIX}/sso` && (req.method === "GET" || req.method === "POST")) await sso(req, res);
-      else if (path.startsWith(`${SAML_PREFIX}/continue/`) && req.method === "GET") await continueRequest(req, res, path.slice(`${SAML_PREFIX}/continue/`.length));
+      else if (path.startsWith(`${SAML_PREFIX}/continue/`) && req.method === "GET")
+        await continueRequest(req, res, path.slice(`${SAML_PREFIX}/continue/`.length));
       else if (path.startsWith(`${SAML_PREFIX}/start/`) && req.method === "GET") await start(req, res, path.slice(`${SAML_PREFIX}/start/`.length));
       else page(res, 404, "Not found", "There is nothing here.");
       return true;

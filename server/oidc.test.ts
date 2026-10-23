@@ -24,7 +24,9 @@ beforeAll(async () => {
   appId = created.body.application.id;
   rp = await client.discovery(new URL(app.base), appId, created.body.clientSecret, undefined, { execute: [client.allowInsecureRequests] });
 
-  const invited = await owner.json<{ member: { id: string }; link: string }>("/api/v1/auth/members", { body: { email: "uma@example.com", name: "Uma", role: "user" } });
+  const invited = await owner.json<{ member: { id: string }; link: string }>("/api/v1/auth/members", {
+    body: { email: "uma@example.com", name: "Uma", role: "user" },
+  });
   const browser = new Browser(app.base);
   await browser.json(`/api/v1/auth/links/${new URL(invited.body.link).searchParams.get("link")}`, { body: { password: PASSWORD } });
   uma = { id: invited.body.member.id, browser };
@@ -61,11 +63,22 @@ describe("the OpenID provider", () => {
   });
 
   it("signs in a member of its groups, and tells the application who they are", async () => {
-    await owner.json(`/api/v1/groups/${(await owner.json<{ groups: Array<{ id: string }> }>("/api/v1/groups")).body.groups[0]!.id}/members`, { method: "PUT", body: { userIds: [uma.id] } });
+    await owner.json(`/api/v1/groups/${(await owner.json<{ groups: Array<{ id: string }> }>("/api/v1/groups")).body.groups[0]!.id}/members`, {
+      method: "PUT",
+      body: { userIds: [uma.id] },
+    });
     const { landed, verifier, state } = await signIn(uma.browser);
     expect(landed.searchParams.get("code")).toBeTruthy();
     const tokens = await client.authorizationCodeGrant(rp, landed, { pkceCodeVerifier: verifier, expectedState: state });
-    expect(tokens.claims()).toMatchObject({ iss: app.base, aud: appId, sub: uma.id, email: "uma@example.com", email_verified: true, name: "Uma", groups: ["Engineering"] });
+    expect(tokens.claims()).toMatchObject({
+      iss: app.base,
+      aud: appId,
+      sub: uma.id,
+      email: "uma@example.com",
+      email_verified: true,
+      name: "Uma",
+      groups: ["Engineering"],
+    });
     const info = await client.fetchUserInfo(rp, tokens.access_token, uma.id);
     expect(info).toMatchObject({ email: "uma@example.com", groups: ["Engineering"] });
   });
@@ -73,7 +86,13 @@ describe("the OpenID provider", () => {
   it("sends people who are not signed in to Identity's sign-in, and back", async () => {
     const stranger = new Browser(app.base);
     const verifier = client.randomPKCECodeVerifier();
-    const url = client.buildAuthorizationUrl(rp, { redirect_uri: CALLBACK, scope: "openid", code_challenge: await client.calculatePKCECodeChallenge(verifier), code_challenge_method: "S256", state: "s" });
+    const url = client.buildAuthorizationUrl(rp, {
+      redirect_uri: CALLBACK,
+      scope: "openid",
+      code_challenge: await client.calculatePKCECodeChallenge(verifier),
+      code_challenge_method: "S256",
+      state: "s",
+    });
     const first = await stranger.fetch(url.href);
     const interaction = new URL(first.headers.get("location")!, app.base);
     expect(interaction.pathname).toMatch(/^\/interaction\/[\w-]+$/);
@@ -85,7 +104,13 @@ describe("the OpenID provider", () => {
     expect((await signIn(uma.browser)).landed.searchParams.get("code")).toBeTruthy();
     await uma.browser.json("/api/v1/auth/logout", { body: {} });
     const verifier = client.randomPKCECodeVerifier();
-    const url = client.buildAuthorizationUrl(rp, { redirect_uri: CALLBACK, scope: "openid", code_challenge: await client.calculatePKCECodeChallenge(verifier), code_challenge_method: "S256", state: "s" });
+    const url = client.buildAuthorizationUrl(rp, {
+      redirect_uri: CALLBACK,
+      scope: "openid",
+      code_challenge: await client.calculatePKCECodeChallenge(verifier),
+      code_challenge_method: "S256",
+      state: "s",
+    });
     const first = await uma.browser.fetch(url.href);
     const interaction = new URL(first.headers.get("location")!, app.base).pathname;
     expect(interaction).toMatch(/^\/interaction\//);
@@ -106,7 +131,13 @@ describe("a second factor per group", () => {
     await uma.browser.json("/api/v1/auth/login", { body: { email: "uma@example.com", password: PASSWORD } });
 
     const verifier = client.randomPKCECodeVerifier();
-    const url = client.buildAuthorizationUrl(rp, { redirect_uri: CALLBACK, scope: "openid", code_challenge: await client.calculatePKCECodeChallenge(verifier), code_challenge_method: "S256", state: "s" });
+    const url = client.buildAuthorizationUrl(rp, {
+      redirect_uri: CALLBACK,
+      scope: "openid",
+      code_challenge: await client.calculatePKCECodeChallenge(verifier),
+      code_challenge_method: "S256",
+      state: "s",
+    });
     const interaction = new URL((await uma.browser.fetch(url.href)).headers.get("location")!, app.base).pathname;
     expect((await uma.browser.fetch(interaction)).headers.get("location")).toBe(`/?return=${encodeURIComponent(interaction)}&mfa=required`);
 
@@ -123,7 +154,13 @@ describe("passkey-only groups", () => {
     const eng = (await owner.json<{ groups: Array<{ id: string; name: string }> }>("/api/v1/groups")).body.groups.find((g) => g.name === "Engineering")!;
     await owner.json(`/api/v1/groups/${eng.id}`, { method: "PATCH", body: { mfa: "passkey" } });
     const verifier = client.randomPKCECodeVerifier();
-    const url = client.buildAuthorizationUrl(rp, { redirect_uri: CALLBACK, scope: "openid", code_challenge: await client.calculatePKCECodeChallenge(verifier), code_challenge_method: "S256", state: "s" });
+    const url = client.buildAuthorizationUrl(rp, {
+      redirect_uri: CALLBACK,
+      scope: "openid",
+      code_challenge: await client.calculatePKCECodeChallenge(verifier),
+      code_challenge_method: "S256",
+      state: "s",
+    });
     const interaction = new URL((await uma.browser.fetch(url.href)).headers.get("location")!, app.base).pathname;
     // Uma's session has an authenticator app: strong, but not a passkey.
     expect((await uma.browser.fetch(interaction)).headers.get("location")).toBe(`/?return=${encodeURIComponent(interaction)}&mfa=passkey`);
@@ -137,7 +174,9 @@ describe("passkey-only groups", () => {
 
 describe("the audit log", () => {
   it("keeps sign-ins to applications, refusals and changes, with who did them", async () => {
-    const { events } = (await owner.json<{ events: Array<{ type: string; actorName: string | null; applicationName: string | null; detail?: string }> }>("/api/v1/audit")).body;
+    const { events } = (
+      await owner.json<{ events: Array<{ type: string; actorName: string | null; applicationName: string | null; detail?: string }> }>("/api/v1/audit")
+    ).body;
     const types = events.map((e) => e.type);
     expect(types).toEqual(expect.arrayContaining(["app-sign-in", "app-sign-in-refused", "application-added", "group-added", "sign-in", "member-invited"]));
     expect(events.find((e) => e.type === "app-sign-in")).toMatchObject({ actorName: "Uma", applicationName: "Grafana" });
@@ -170,7 +209,9 @@ describe("the directory", () => {
   });
 
   it("lets only admins change applications, and shows the secret once", async () => {
-    const editorLink = await owner.json<{ member: { id: string }; link: string }>("/api/v1/auth/members", { body: { email: "ed@example.com", role: "editor" } });
+    const editorLink = await owner.json<{ member: { id: string }; link: string }>("/api/v1/auth/members", {
+      body: { email: "ed@example.com", role: "editor" },
+    });
     const ed = new Browser(app.base);
     await ed.json(`/api/v1/auth/links/${new URL(editorLink.body.link).searchParams.get("link")}`, { body: { password: PASSWORD } });
     expect((await ed.json("/api/v1/applications")).status).toBe(200);
@@ -184,7 +225,10 @@ describe("the directory", () => {
     const vpn = await owner.json<{ application: { redirectUris: string[] }; clientSecret: string }>("/api/v1/applications", {
       body: { name: "VPN", template: "openasy-vpn", url: "https://vpn.example.com/" },
     });
-    expect(vpn.body.application.redirectUris).toEqual(["https://vpn.example.com/api/v1/auth/oidc/openasy-identity/callback", "https://vpn.example.com/api/v1/auth/oidc/sso/callback"]);
+    expect(vpn.body.application.redirectUris).toEqual([
+      "https://vpn.example.com/api/v1/auth/oidc/openasy-identity/callback",
+      "https://vpn.example.com/api/v1/auth/oidc/sso/callback",
+    ]);
     expect((await owner.json("/api/v1/applications", { body: { name: "Bad", redirectUris: ["http://evil.example.com/cb"] } })).status).toBe(422);
   });
 });

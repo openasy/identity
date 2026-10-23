@@ -1,7 +1,19 @@
-import { AppShell, BrandProvider, Button, Callout, EmptyState, navigate, PageHeader, PRODUCT_IDS, usePath, type ProductId, useThemePreference } from "@openasy/ui";
+import {
+  AppShell,
+  BrandProvider,
+  Button,
+  Callout,
+  EmptyState,
+  navigate,
+  PageHeader,
+  PRODUCT_IDS,
+  usePath,
+  type ProductId,
+  useThemePreference,
+} from "@openasy/ui";
 import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAuth } from "@openasy/auth/react";
 import { AppWindow, ArrowRight, FolderTree, RefreshCw, KeyRound, LayoutDashboard, LogIn, LogOut, ScrollText, UserRound, Users, UsersRound } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ProductLink } from "./api.ts";
 import { ApplicationsPage } from "./applications.tsx";
 import { DirectoriesPage } from "./directories.tsx";
@@ -12,7 +24,19 @@ import { ProvisioningPage } from "./provisioning.tsx";
 import { useApi } from "./shared.tsx";
 import { useT } from "./i18n.ts";
 
-export const PAGES = ["overview", "applications", "people", "groups", "audit", "account", "members", "signin", "provisioning", "directories", "tokens"] as const;
+export const PAGES = [
+  "overview",
+  "applications",
+  "people",
+  "groups",
+  "audit",
+  "account",
+  "members",
+  "signin",
+  "provisioning",
+  "directories",
+  "tokens",
+] as const;
 type Page = (typeof PAGES)[number];
 
 function parsePage(path: string): Page {
@@ -22,8 +46,14 @@ function parsePage(path: string): Page {
 
 const SETTINGS = {
   account: ["Account", "Your profile, password, two-step verification and where you are signed in."],
-  members: ["Members", "Who can manage this Identity, and with which role. Viewers see everything; editors also change groups; admins also manage applications, providers, members and tokens. People with the User role only sign in to applications."],
-  signin: ["Sign-in", "Identity providers people can sign in to Identity with, such as Keycloak or Microsoft Entra ID, and which of their groups give which role."],
+  members: [
+    "Members",
+    "Who can manage this Identity, and with which role. Viewers see everything; editors also change groups; admins also manage applications, providers, members and tokens. People with the User role only sign in to applications.",
+  ],
+  signin: [
+    "Sign-in",
+    "Identity providers people can sign in to Identity with, such as Keycloak or Microsoft Entra ID, and which of their groups give which role.",
+  ],
   tokens: ["API tokens", "For scripts. Each token has one role and an expiry; the secret is shown once."],
 } as const;
 
@@ -62,21 +92,22 @@ function Product() {
   const asked = sessionStorage.getItem(MFA);
   const strong = me.session.mfa || me.session.method === "passkey" || me.session.method.startsWith("oidc:");
   const waitForFactor = !!returning && (asked === "passkey" ? me.session.factor !== "passkey" : asked === "required" && !strong);
-  const continueToApp = () => {
+  const continueToApp = useCallback(() => {
     sessionStorage.removeItem(RETURN);
     sessionStorage.removeItem(MFA);
     location.replace(returning!);
-  };
+  }, [returning]);
 
   useEffect(() => {
     if (returning && !waitForFactor) continueToApp();
-  }, [returning, waitForFactor]);
+  }, [returning, waitForFactor, continueToApp]);
   // The install's other products (OPENASY_PRODUCTS), for the switcher; ids this UI does not know are left out.
   const manages = can("viewer");
   useEffect(() => {
     if (!manages) return;
     void call<{ products: ProductLink[] }>("/api/v1/products").then(
-      (r) => setProducts(r.products.filter((p): p is ProductLink & { id: ProductId } => p.id !== "identity" && (PRODUCT_IDS as readonly string[]).includes(p.id))),
+      (r) =>
+        setProducts(r.products.filter((p): p is ProductLink & { id: ProductId } => p.id !== "identity" && (PRODUCT_IDS as readonly string[]).includes(p.id))),
       () => {},
     );
   }, [call, manages]);
@@ -133,9 +164,17 @@ function Product() {
       ) : shown === "groups" ? (
         <GroupsPage call={call} />
       ) : shown === "directories" ? (
-        can("admin") ? <DirectoriesPage call={call} /> : <EmptyState title={t("product.adminsOnly")}>{t("product.askAnAdminOfThis")}</EmptyState>
+        can("admin") ? (
+          <DirectoriesPage call={call} />
+        ) : (
+          <EmptyState title={t("product.adminsOnly")}>{t("product.askAnAdminOfThis")}</EmptyState>
+        )
       ) : shown === "provisioning" ? (
-        can("admin") ? <ProvisioningPage call={call} /> : <EmptyState title={t("product.adminsOnly")}>{t("product.askAnAdminOfThis")}</EmptyState>
+        can("admin") ? (
+          <ProvisioningPage call={call} />
+        ) : (
+          <EmptyState title={t("product.adminsOnly")}>{t("product.askAnAdminOfThis")}</EmptyState>
+        )
       ) : shown !== "account" && !can("admin") ? (
         <EmptyState title={t("product.adminsOnly")}>{t("product.askAnAdminOfThis")}</EmptyState>
       ) : (
@@ -154,11 +193,7 @@ function Product() {
           {waitForFactor && (
             <Callout tone="warning" title={asked === "passkey" ? t("product.useAPasskeyToContinue") : t("product.addASecondFactorTo")} className="mb-3">
               <span className="flex flex-col items-start gap-2">
-                <span>
-                  {asked === "passkey"
-                    ? t("product.theApplicationYouAreSigning")
-                    : t("product.theApplicationYouAreSigning2")}
-                </span>
+                <span>{asked === "passkey" ? t("product.theApplicationYouAreSigning") : t("product.theApplicationYouAreSigning2")}</span>
                 <Button variant="primary" iconRight={<ArrowRight />} onClick={continueToApp}>
                   {t("product.continueToTheApplication")}
                 </Button>

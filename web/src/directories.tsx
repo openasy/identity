@@ -29,7 +29,10 @@ interface Result {
 }
 
 /** What each kind usually needs; the server has the same (server/ldap.ts). */
-const DEFAULTS: Record<Kind, { url: string; bindDn: string; baseDn: string; userFilter: string; emailAttribute: string; nameAttribute: string; groupFilter: string }> = {
+const DEFAULTS: Record<
+  Kind,
+  { url: string; bindDn: string; baseDn: string; userFilter: string; emailAttribute: string; nameAttribute: string; groupFilter: string }
+> = {
   "active-directory": {
     url: "ldaps://dc1.corp.example.com:636",
     bindDn: "CN=openasy-reader,OU=Service Accounts,DC=corp,DC=example,DC=com",
@@ -117,7 +120,12 @@ function AddDirectory({ call, onAdded, onCancel }: { call: Call; onAdded: () => 
         {field("groupFilter", "Groups filter", { hint: t("addDirectory.groupsThatMatchFollowThe") })}
         {field("syncMinutes", "Read every (minutes)", { mono: false, hint: t("addDirectory.from5To1440Default") })}
       </div>
-      <Checkbox label="StartTLS" description="Encrypt an ldap:// connection before the password is sent." checked={startTls} onChange={(e) => setStartTls(e.target.checked)} />
+      <Checkbox
+        label="StartTLS"
+        description="Encrypt an ldap:// connection before the password is sent."
+        checked={startTls}
+        onChange={(e) => setStartTls(e.target.checked)}
+      />
       <Problem error={action.error} title={t("addDirectory.notAdded")} />
     </Dialog>
   );
@@ -131,7 +139,8 @@ export function DirectoriesPage({ call }: { call: Call }) {
   const [adding, setAdding] = useState(false);
   const [result, setResult] = useState<{ name: string; what: string; r: Result }>();
   const action = useAction();
-  const run = (d: Directory, what: "check" | "sync") => action.run(async () => (setResult({ name: d.name, what, r: await call<Result>(`/api/v1/directories/${d.id}/${what}`, { method: "POST" }) }), reload()));
+  const run = (d: Directory, what: "check" | "sync") =>
+    action.run(async () => (setResult({ name: d.name, what, r: await call<Result>(`/api/v1/directories/${d.id}/${what}`, { method: "POST" }) }), reload()));
 
   const columns: Column<Directory>[] = [
     { id: "name", header: t("directoriesPage.directory"), cell: (d) => d.name, sortValue: (d) => d.name },
@@ -144,9 +153,18 @@ export function DirectoriesPage({ call }: { call: Call }) {
       cell: (d) =>
         d.lastError ? (
           <Badge tone="danger" title={d.lastError}>
-            {t("directoriesPage.failed", { ago: ago(d.lastSyncAt) })}</Badge>
+            {t("directoriesPage.failed", { ago: ago(d.lastSyncAt) })}
+          </Badge>
         ) : d.lastSyncAt ? (
-          <span title={d.lastCounts ? t("directoriesPage.peopleGroupsTurnedOff", { people: d.lastCounts.people, groups: d.lastCounts.groups, disabled: d.lastCounts.disabled }) : undefined}>{ago(d.lastSyncAt)}</span>
+          <span
+            title={
+              d.lastCounts
+                ? t("directoriesPage.peopleGroupsTurnedOff", { people: d.lastCounts.people, groups: d.lastCounts.groups, disabled: d.lastCounts.disabled })
+                : undefined
+            }
+          >
+            {ago(d.lastSyncAt)}
+          </span>
         ) : (
           <Badge tone="info">{t("directoriesPage.notReadYet")}</Badge>
         ),
@@ -163,7 +181,15 @@ export function DirectoriesPage({ call }: { call: Call }) {
           <Button size="xs" variant="ghost" icon={<RefreshCw />} onClick={() => void run(d, "sync")}>
             {t("directoriesPage.readNow")}
           </Button>
-          <Button size="xs" variant="ghost" icon={<Trash2 />} onClick={() => confirm(t("directoriesPage.removeItsPeopleAreTurned", { name: d.name, people: d.people })) && void action.run(() => call(`/api/v1/directories/${d.id}`, { method: "DELETE" }).then(reload))}>
+          <Button
+            size="xs"
+            variant="ghost"
+            icon={<Trash2 />}
+            onClick={() =>
+              confirm(t("directoriesPage.removeItsPeopleAreTurned", { name: d.name, people: d.people })) &&
+              void action.run(() => call(`/api/v1/directories/${d.id}`, { method: "DELETE" }).then(reload))
+            }
+          >
             {t("directoriesPage.remove")}
           </Button>
         </span>
@@ -184,15 +210,29 @@ export function DirectoriesPage({ call }: { call: Call }) {
       />
       {adding && <AddDirectory call={call} onAdded={() => (setAdding(false), reload())} onCancel={() => setAdding(false)} />}
       {result && (
-        <Callout tone={result.r.ok ? "success" : "danger"} title={`${result.what === "check" ? "Checked" : "Read"} ${result.name}`} onDismiss={() => setResult(undefined)}>
+        <Callout
+          tone={result.r.ok ? "success" : "danger"}
+          title={`${result.what === "check" ? "Checked" : "Read"} ${result.name}`}
+          onDismiss={() => setResult(undefined)}
+        >
           {result.r.ok
-            ? t("directoriesPage.peopleAndGroups", { people: String(result.r.people), groups: String(result.r.groups), value: result.r.disabled !== undefined ? `; ${result.r.disabled} turned off` : "" })
+            ? t("directoriesPage.peopleAndGroups", {
+                people: String(result.r.people),
+                groups: String(result.r.groups),
+                value: result.r.disabled !== undefined ? `; ${result.r.disabled} turned off` : "",
+              })
             : result.r.error}
         </Callout>
       )}
       <Problem error={action.error} />
       <Panel flush>
-        <List label={t("directoriesPage.directories")} rows={data?.directories} columns={columns} empty={t("directoriesPage.noDirectories")} getRowId={(d) => d.id} />
+        <List
+          label={t("directoriesPage.directories")}
+          rows={data?.directories}
+          columns={columns}
+          empty={t("directoriesPage.noDirectories")}
+          getRowId={(d) => d.id}
+        />
       </Panel>
     </>
   );

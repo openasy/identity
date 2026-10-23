@@ -26,7 +26,16 @@ class ScimError extends Error {
 }
 
 type Json = Record<string, unknown>;
-type UserRow = { id: string; email: string; name: string; status: string; created_at: string; user_name: string | null; external_id: string | null; updated_at: string | null };
+type UserRow = {
+  id: string;
+  email: string;
+  name: string;
+  status: string;
+  created_at: string;
+  user_name: string | null;
+  external_id: string | null;
+  updated_at: string | null;
+};
 type GroupRow = { id: string; name: string; external_id: string | null; created_at: string };
 
 /** SCIM sends booleans as strings now and then (Microsoft Entra ID: "False"). */
@@ -34,7 +43,8 @@ const bool = (v: unknown) => (typeof v === "string" ? v.toLowerCase() === "true"
 
 export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit; base: string }) {
   const setting = (key: string) => (db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined)?.value;
-  const putSetting = (key: string, value: string) => db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(key, value);
+  const putSetting = (key: string, value: string) =>
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(key, value);
 
   // ---- the token -------------------------------------------------------------------------------------------------
 
@@ -54,7 +64,8 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
     const header = req.headers.authorization ?? "";
     const expected = setting("scim_token_hash");
     const given = Buffer.from(sha256(header.startsWith("Bearer ") ? header.slice(7) : ""));
-    if (!expected || !timingSafeEqual(given, Buffer.from(expected))) throw new ScimError(401, "Send the SCIM token from Identity, Settings, Provisioning, as a bearer token.");
+    if (!expected || !timingSafeEqual(given, Buffer.from(expected)))
+      throw new ScimError(401, "Send the SCIM token from Identity, Settings, Provisioning, as a bearer token.");
     putSetting("scim_last_used", now());
   }
 
@@ -70,7 +81,10 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
   }
 
   const groupsOf = (userId: string) =>
-    db.prepare("SELECT g.id, g.name FROM group_members m JOIN groups g ON g.id = m.group_id WHERE m.user_id = ? ORDER BY g.name").all(userId) as Array<{ id: string; name: string }>;
+    db.prepare("SELECT g.id, g.name FROM group_members m JOIN groups g ON g.id = m.group_id WHERE m.user_id = ? ORDER BY g.name").all(userId) as Array<{
+      id: string;
+      name: string;
+    }>;
 
   function toUser(u: UserRow): Json {
     return {
@@ -90,14 +104,24 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
   /** What a SCIM user says about a person, as Identity keeps it. */
   function readUser(b: Json, current?: UserRow) {
     const emails = Array.isArray(b.emails) ? (b.emails as Json[]) : [];
-    const email = String(emails.find((e) => bool(e.primary))?.value ?? emails[0]?.value ?? (String(b.userName ?? "").includes("@") ? b.userName : current?.email) ?? "")
+    const email = String(
+      emails.find((e) => bool(e.primary))?.value ?? emails[0]?.value ?? (String(b.userName ?? "").includes("@") ? b.userName : current?.email) ?? "",
+    )
       .trim()
       .toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new ScimError(400, "A user needs an email address, in emails or as userName.", "invalidValue");
     const name = b.name as Json | undefined;
-    const display = String(b.displayName ?? name?.formatted ?? ([name?.givenName, name?.familyName].filter(Boolean).join(" ") || current?.name || email)).trim();
+    const display = String(
+      b.displayName ?? name?.formatted ?? ([name?.givenName, name?.familyName].filter(Boolean).join(" ") || current?.name || email),
+    ).trim();
     const userName = String(b.userName ?? current?.user_name ?? email).trim();
-    return { email, name: display.slice(0, 128), userName, externalId: typeof b.externalId === "string" ? b.externalId : (current?.external_id ?? null), active: b.active === undefined ? current?.status !== "disabled" : bool(b.active) };
+    return {
+      email,
+      name: display.slice(0, 128),
+      userName,
+      externalId: typeof b.externalId === "string" ? b.externalId : (current?.external_id ?? null),
+      active: b.active === undefined ? current?.status !== "disabled" : bool(b.active),
+    };
   }
 
   function saveUser(id: string, v: ReturnType<typeof readUser>, created: boolean) {
@@ -110,7 +134,12 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
     db.prepare(
       "INSERT INTO scim_users (user_id, user_name, external_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET user_name = excluded.user_name, external_id = excluded.external_id, updated_at = excluded.updated_at",
     ).run(id, v.userName, v.externalId, at, at);
-    audit.record({ type: created ? "scim-user-created" : v.active ? "scim-user-updated" : "scim-user-deactivated", actor: "scim", target: id, detail: v.email });
+    audit.record({
+      type: created ? "scim-user-created" : v.active ? "scim-user-updated" : "scim-user-deactivated",
+      actor: "scim",
+      target: id,
+      detail: v.email,
+    });
   }
 
   function createUser(b: Json): Json {
@@ -121,7 +150,8 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
     if (db.prepare("SELECT 1 FROM scim_users WHERE user_name = ?").get(v.userName)) throw new ScimError(409, `${v.userName} exists.`, "uniqueness");
     // Someone already in the directory, for example invited before, is taken over rather than duplicated.
     const id = existing?.id ?? randomUUID();
-    if (!existing) db.prepare("INSERT INTO auth_users (id, email, name, role, status, created_at) VALUES (?, ?, ?, 'user', 'active', ?)").run(id, v.email, v.name, now());
+    if (!existing)
+      db.prepare("INSERT INTO auth_users (id, email, name, role, status, created_at) VALUES (?, ?, ?, 'user', 'active', ?)").run(id, v.email, v.name, now());
     saveUser(id, v, true);
     return toUser(requireUser(id));
   }
@@ -139,7 +169,8 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
         else if (p === "username") next.userName = value;
         else if (p === "externalid") next.externalId = value;
         else if (p === "name.formatted") next.displayName = value;
-        else if (p === "name.givenname" || p === "name.familyname") next.name = { ...(next.name as Json), [p === "name.givenname" ? "givenName" : "familyName"]: value, formatted: undefined };
+        else if (p === "name.givenname" || p === "name.familyname")
+          next.name = { ...(next.name as Json), [p === "name.givenname" ? "givenName" : "familyName"]: value, formatted: undefined };
         else if (p.startsWith("emails")) next.emails = [{ value, primary: true }];
         else if (p === "name") next.name = value;
         else if (p === "emails") next.emails = value;
@@ -149,7 +180,8 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
     }
     // A changed given or family name rebuilds the display name, unless one was given.
     const n = next.name as Json | undefined;
-    if (n && n.formatted === undefined && (n.givenName || n.familyName) && next.displayName === toUser(u).displayName) next.displayName = [n.givenName, n.familyName].filter(Boolean).join(" ");
+    if (n && n.formatted === undefined && (n.givenName || n.familyName) && next.displayName === toUser(u).displayName)
+      next.displayName = [n.givenName, n.familyName].filter(Boolean).join(" ");
     saveUser(id, readUser(next, u), false);
     return toUser(requireUser(id));
   }
@@ -173,7 +205,10 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
     return g;
   }
   const membersOf = (id: string) =>
-    db.prepare("SELECT u.id, u.name FROM group_members m JOIN auth_users u ON u.id = m.user_id WHERE m.group_id = ? ORDER BY u.name").all(id) as Array<{ id: string; name: string }>;
+    db.prepare("SELECT u.id, u.name FROM group_members m JOIN auth_users u ON u.id = m.user_id WHERE m.group_id = ? ORDER BY u.name").all(id) as Array<{
+      id: string;
+      name: string;
+    }>;
 
   const toGroup = (g: GroupRow): Json => ({
     schemas: [GROUP],
@@ -202,7 +237,8 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
   function groupName(v: unknown, id?: string) {
     const name = typeof v === "string" ? v.trim() : "";
     if (!name || name.length > 100) throw new ScimError(400, "displayName is required, at most 100 characters.", "invalidValue");
-    if (db.prepare("SELECT 1 FROM groups WHERE name = ? AND id != ?").get(name, id ?? "")) throw new ScimError(409, `A group named ${name} exists.`, "uniqueness");
+    if (db.prepare("SELECT 1 FROM groups WHERE name = ? AND id != ?").get(name, id ?? ""))
+      throw new ScimError(409, `A group named ${name} exists.`, "uniqueness");
     return name;
   }
 
@@ -223,7 +259,11 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
 
   function replaceGroup(id: string, b: Json): Json {
     requireGroup(id);
-    db.prepare("UPDATE groups SET name = ?, external_id = COALESCE(?, external_id) WHERE id = ?").run(groupName(b.displayName, id), typeof b.externalId === "string" ? b.externalId : null, id);
+    db.prepare("UPDATE groups SET name = ?, external_id = COALESCE(?, external_id) WHERE id = ?").run(
+      groupName(b.displayName, id),
+      typeof b.externalId === "string" ? b.externalId : null,
+      id,
+    );
     const ids = memberIds(b.members);
     db.prepare("DELETE FROM group_members WHERE group_id = ?").run(id);
     addMembers(id, ids);
@@ -238,9 +278,11 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
       // members[value eq "<id>"]: one member, as Okta removes them.
       const one = op.path?.match(/^members\[value eq "([^"]+)"\]$/i)?.[1];
       if (op.op === "remove" && one) removeMembers(id, [one]);
-      else if (op.op === "remove" && path === "members") (op.value === undefined ? db.prepare("DELETE FROM group_members WHERE group_id = ?").run(id) : removeMembers(id, memberIds(op.value)));
+      else if (op.op === "remove" && path === "members")
+        op.value === undefined ? db.prepare("DELETE FROM group_members WHERE group_id = ?").run(id) : removeMembers(id, memberIds(op.value));
       else if (op.op === "add" && path === "members") addMembers(id, memberIds(op.value));
-      else if (op.op === "replace" && path === "members") (db.prepare("DELETE FROM group_members WHERE group_id = ?").run(id), addMembers(id, memberIds(op.value)));
+      else if (op.op === "replace" && path === "members")
+        (db.prepare("DELETE FROM group_members WHERE group_id = ?").run(id), addMembers(id, memberIds(op.value)));
       else if (op.op === "replace" && path === "displayname") db.prepare("UPDATE groups SET name = ? WHERE id = ?").run(groupName(op.value, id), id);
       else if ((op.op === "replace" || op.op === "add") && !path && op.value && typeof op.value === "object") {
         const v = op.value as Json;
@@ -263,7 +305,11 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
 
   function operations(b: Json): Array<{ op: string; path?: string; value?: unknown }> {
     if (!Array.isArray(b.Operations)) throw new ScimError(400, `PATCH needs Operations, with the schema ${PATCH}.`, "invalidSyntax");
-    return (b.Operations as Json[]).map((o) => ({ op: String(o.op ?? "").toLowerCase(), path: typeof o.path === "string" ? o.path : undefined, value: o.value }));
+    return (b.Operations as Json[]).map((o) => ({
+      op: String(o.op ?? "").toLowerCase(),
+      path: typeof o.path === "string" ? o.path : undefined,
+      value: o.value,
+    }));
   }
 
   /** The filters providers send to find someone before they create them: attribute eq "value". */
@@ -285,13 +331,21 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
 
   function listUsers(q: URLSearchParams) {
     const f = filterOf(q, { username: "COALESCE(s.user_name, u.email)", externalid: "s.external_id", "emails.value": "u.email" });
-    const rows = (f ? db.prepare(`${userSelect} AND ${f.column} = ? COLLATE NOCASE ORDER BY u.created_at`).all(f.value) : db.prepare(`${userSelect} ORDER BY u.created_at`).all()) as UserRow[];
+    const rows = (
+      f
+        ? db.prepare(`${userSelect} AND ${f.column} = ? COLLATE NOCASE ORDER BY u.created_at`).all(f.value)
+        : db.prepare(`${userSelect} ORDER BY u.created_at`).all()
+    ) as UserRow[];
     return list(rows.map(toUser), q);
   }
 
   function listGroups(q: URLSearchParams) {
     const f = filterOf(q, { displayname: "name", externalid: "external_id" });
-    const rows = (f ? db.prepare(`${groupSelect} AND ${f.column} = ? COLLATE NOCASE ORDER BY created_at`).all(f.value) : db.prepare(`${groupSelect} ORDER BY created_at`).all()) as GroupRow[];
+    const rows = (
+      f
+        ? db.prepare(`${groupSelect} AND ${f.column} = ? COLLATE NOCASE ORDER BY created_at`).all(f.value)
+        : db.prepare(`${groupSelect} ORDER BY created_at`).all()
+    ) as GroupRow[];
     return list(rows.map(toGroup), q);
   }
 
@@ -356,7 +410,8 @@ export function createScim({ db, audit, base }: { db: DatabaseSync; audit: Audit
         else if (kind === "Users" && !id && m === "GET") out = [200, listUsers(q)];
         else if (kind === "Users" && !id && m === "POST") out = [201, createUser(await readBody(req))];
         else if (kind === "Users" && id && m === "GET") out = [200, toUser(requireUser(id))];
-        else if (kind === "Users" && id && m === "PUT") out = [200, (saveUser(id, readUser(await readBody(req), requireUser(id)), false), toUser(requireUser(id)))];
+        else if (kind === "Users" && id && m === "PUT")
+          out = [200, (saveUser(id, readUser(await readBody(req), requireUser(id)), false), toUser(requireUser(id)))];
         else if (kind === "Users" && id && m === "PATCH") out = [200, patchUser(id, await readBody(req))];
         else if (kind === "Users" && id && m === "DELETE") out = [204, (deleteUser(id), undefined)];
         else if (kind === "Groups" && !id && m === "GET") out = [200, listGroups(q)];

@@ -78,8 +78,34 @@ export function Problem({ error, title = "That did not work" }: { error?: string
   );
 }
 
-export function List<T>({ label, rows, columns, empty, getRowId, onRowClick }: { label: string; rows: T[] | undefined; columns: Column<T>[]; empty: string; getRowId: (r: T) => string; onRowClick?: (r: T) => void }) {
-  return <DataTable label={label} columns={columns} rows={rows ?? []} loading={!rows} getRowId={getRowId} pageSize={50} density="compact" onRowClick={onRowClick} empty={<EmptyState title={empty} />} />;
+export function List<T>({
+  label,
+  rows,
+  columns,
+  empty,
+  getRowId,
+  onRowClick,
+}: {
+  label: string;
+  rows: T[] | undefined;
+  columns: Column<T>[];
+  empty: string;
+  getRowId: (r: T) => string;
+  onRowClick?: (r: T) => void;
+}) {
+  return (
+    <DataTable
+      label={label}
+      columns={columns}
+      rows={rows ?? []}
+      loading={!rows}
+      getRowId={getRowId}
+      pageSize={50}
+      density="compact"
+      onRowClick={onRowClick}
+      empty={<EmptyState title={empty} />}
+    />
+  );
 }
 
 /** Commands to copy onto a host. */

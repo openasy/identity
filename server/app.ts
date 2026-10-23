@@ -148,7 +148,12 @@ export function createApp({ db, version, auth, directory, oidc, audit, scim, dir
     { method: "GET", path: "/api/v1/products", auth: "viewer", handle: () => ({ products }) },
 
     // Applications people sign in to (OpenID Connect clients). Admins change them: they decide who gets in.
-    { method: "GET", path: "/api/v1/applications", auth: "viewer", handle: () => ({ applications: directory.listApplications(), issuer: oidc.provider.issuer }) },
+    {
+      method: "GET",
+      path: "/api/v1/applications",
+      auth: "viewer",
+      handle: () => ({ applications: directory.listApplications(), issuer: oidc.provider.issuer }),
+    },
     {
       method: "POST",
       path: "/api/v1/applications",
@@ -325,7 +330,9 @@ export function createApp({ db, version, auth, directory, oidc, audit, scim, dir
           refused24h: audit.count("app-sign-in-refused", day),
           failedSignIns24h: audit.count("sign-in-failed", day),
           // People who sign in with a password alone: no second factor, and no identity provider to ask for one.
-          withoutSecondFactor: people.filter((p) => p.status === "active" && !p.secondFactor && p.providers.length === 0).map((p) => ({ id: p.id, name: p.name, email: p.email })),
+          withoutSecondFactor: people
+            .filter((p) => p.status === "active" && !p.secondFactor && p.providers.length === 0)
+            .map((p) => ({ id: p.id, name: p.name, email: p.email })),
         };
       },
     },
@@ -422,4 +429,3 @@ export function createApp({ db, version, auth, directory, oidc, audit, scim, dir
     }
   };
 }
-

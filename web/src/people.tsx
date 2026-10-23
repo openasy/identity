@@ -32,8 +32,18 @@ export function PeoplePage({ call }: { call: Call }) {
   const columns: Column<Person>[] = [
     { id: "name", header: t("peoplePage.name"), cell: (p) => p.name, sortValue: (p) => p.name },
     { id: "email", header: t("peoplePage.email"), mono: true, cell: (p) => p.email, sortValue: (p) => p.email },
-    { id: "role", header: t("peoplePage.managesIdentity"), width: "150px", cell: (p) => (p.role === "user" ? <span className="text-fg-muted">{t("peoplePage.no")}</span> : ROLE[p.role]) },
-    { id: "status", header: t("peoplePage.status"), width: "110px", cell: (p) => <Badge tone={p.status === "active" ? "success" : p.status === "invited" ? "info" : "neutral"}>{p.status}</Badge> },
+    {
+      id: "role",
+      header: t("peoplePage.managesIdentity"),
+      width: "150px",
+      cell: (p) => (p.role === "user" ? <span className="text-fg-muted">{t("peoplePage.no")}</span> : ROLE[p.role]),
+    },
+    {
+      id: "status",
+      header: t("peoplePage.status"),
+      width: "110px",
+      cell: (p) => <Badge tone={p.status === "active" ? "success" : p.status === "invited" ? "info" : "neutral"}>{p.status}</Badge>,
+    },
     { id: "groups", header: t("peoplePage.groups"), cell: (p) => p.groups.join(", ") || <span className="text-fg-muted">none</span> },
   ];
 

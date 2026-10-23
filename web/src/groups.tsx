@@ -6,11 +6,11 @@ import type { Group, Person } from "./api.ts";
 import { List, Problem, useAction, useData, type Call } from "./shared.tsx";
 import { useT, type T } from "./i18n.ts";
 
-const MFA_OPTIONS = (t: T) => ([
+const MFA_OPTIONS = (t: T) => [
   { value: "optional", label: t("mfaOptions.optional") },
   { value: "required", label: t("mfaOptions.required") },
   { value: "passkey", label: t("mfaOptions.passkeyOnly") },
-]);
+];
 
 /** Choosing a group's members by hand; groups that follow a provider take theirs from it. */
 function Members({ call, group, people, onDone }: { call: Call; group: Group; people: Person[]; onDone: () => void }) {
@@ -35,7 +35,13 @@ function Members({ call, group, people, onDone }: { call: Call; group: Group; pe
     >
       <div className="flex flex-col gap-1.5">
         {people.map((p) => (
-          <Checkbox key={p.id} label={p.name} description={p.email} checked={chosen.includes(p.id)} onChange={(e) => setChosen(e.target.checked ? [...chosen, p.id] : chosen.filter((id) => id !== p.id))} />
+          <Checkbox
+            key={p.id}
+            label={p.name}
+            description={p.email}
+            checked={chosen.includes(p.id)}
+            onChange={(e) => setChosen(e.target.checked ? [...chosen, p.id] : chosen.filter((id) => id !== p.id))}
+          />
         ))}
       </div>
       <Problem error={action.error} title={t("members.notSaved")} />
@@ -70,7 +76,12 @@ export function GroupsPage({ call }: { call: Call }) {
     { id: "name", header: t("groupsPage.group"), cell: (g) => g.name, sortValue: (g) => g.name },
     { id: "description", header: t("groupsPage.description"), cell: (g) => g.description || <span className="text-fg-muted">none</span> },
     { id: "members", header: t("groupsPage.members"), width: "100px", align: "right", cell: (g) => g.members, sortValue: (g) => g.members },
-    { id: "source", header: t("groupsPage.membersFrom"), width: "200px", cell: (g) => (g.syncedFrom ? <Badge tone="info">{g.syncedFrom}</Badge> : "Chosen here") },
+    {
+      id: "source",
+      header: t("groupsPage.membersFrom"),
+      width: "200px",
+      cell: (g) => (g.syncedFrom ? <Badge tone="info">{g.syncedFrom}</Badge> : "Chosen here"),
+    },
     {
       id: "mfa",
       header: t("groupsPage.secondFactor"),
@@ -81,7 +92,9 @@ export function GroupsPage({ call }: { call: Call }) {
             aria-label={t("groupsPage.secondFactorFor", { name: g.name })}
             value={g.mfa}
             options={MFA_OPTIONS(t)}
-            onChange={(e) => void action.run(() => call(`/api/v1/groups/${g.id}`, { method: "PATCH", body: JSON.stringify({ mfa: e.target.value }) }).then(reload))}
+            onChange={(e) =>
+              void action.run(() => call(`/api/v1/groups/${g.id}`, { method: "PATCH", body: JSON.stringify({ mfa: e.target.value }) }).then(reload))
+            }
           />
         ) : (
           MFA_OPTIONS(t).find((o) => o.value === g.mfa)!.label
@@ -100,7 +113,15 @@ export function GroupsPage({ call }: { call: Call }) {
                     {t("groupsPage.members")}
                   </Button>
                 )}
-                <Button size="xs" variant="ghost" icon={<Trash2 />} onClick={() => confirm(t("groupsPage.removeItsMembersLoseThe", { name: g.name })) && void action.run(() => call(`/api/v1/groups/${g.id}`, { method: "DELETE" }).then(reload))}>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  icon={<Trash2 />}
+                  onClick={() =>
+                    confirm(t("groupsPage.removeItsMembersLoseThe", { name: g.name })) &&
+                    void action.run(() => call(`/api/v1/groups/${g.id}`, { method: "DELETE" }).then(reload))
+                  }
+                >
                   {t("groupsPage.remove")}
                 </Button>
               </span>
@@ -153,7 +174,9 @@ export function GroupsPage({ call }: { call: Call }) {
           onChange={(e) => setSyncedFrom(e.target.value)}
         />
       </Dialog>
-      {editing && people.data && <Members key={editing.id} call={call} group={editing} people={people.data.people} onDone={() => (setEditing(undefined), reload(), people.reload())} />}
+      {editing && people.data && (
+        <Members key={editing.id} call={call} group={editing} people={people.data.people} onDone={() => (setEditing(undefined), reload(), people.reload())} />
+      )}
       {!adding && <Problem error={action.error} />}
       <Panel flush>
         <List label={t("groupsPage.groups")} rows={data?.groups} columns={columns} empty={t("groupsPage.noGroupsYet")} getRowId={(g) => g.id} />

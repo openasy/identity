@@ -31,11 +31,18 @@ describe("SCIM", () => {
     const r = await scim("GET", "/Users", undefined, "wrong");
     expect(r.status).toBe(401);
     expect(r.body).toMatchObject({ schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"], status: "401" });
-    expect((await owner.json<{ url: string; tokenCreatedAt: string }>("/api/v1/provisioning")).body).toMatchObject({ url: `${app.base}/scim/v2`, tokenCreatedAt: expect.any(String) });
+    expect((await owner.json<{ url: string; tokenCreatedAt: string }>("/api/v1/provisioning")).body).toMatchObject({
+      url: `${app.base}/scim/v2`,
+      tokenCreatedAt: expect.any(String),
+    });
   });
 
   it("describes what it supports", async () => {
-    expect((await scim<Json>("GET", "/ServiceProviderConfig")).body).toMatchObject({ patch: { supported: true }, filter: { supported: true }, bulk: { supported: false } });
+    expect((await scim<Json>("GET", "/ServiceProviderConfig")).body).toMatchObject({
+      patch: { supported: true },
+      filter: { supported: true },
+      bulk: { supported: false },
+    });
     expect((await scim<{ Resources: Json[] }>("GET", "/ResourceTypes")).body.Resources.map((r) => r.id)).toEqual(["User", "Group"]);
   });
 
@@ -55,13 +62,24 @@ describe("SCIM", () => {
     expect((await scim("POST", "/Users", { userName: "ann@example.com", emails: [{ value: "ann@example.com" }] })).status).toBe(409);
 
     // Turned off: their sessions end at once.
-    app.db.prepare("INSERT INTO auth_sessions (id_hash, id, user_id, method, created_at, last_seen_at, expires_at) VALUES ('h', 's', ?, 'oidc:okta', 'x', 'x', 'x')").run(id);
+    app.db
+      .prepare(
+        "INSERT INTO auth_sessions (id_hash, id, user_id, method, created_at, last_seen_at, expires_at) VALUES ('h', 's', ?, 'oidc:okta', 'x', 'x', 'x')",
+      )
+      .run(id);
     const off = await scim<Json>("PATCH", `/Users/${id}`, { schemas: [PATCH], Operations: [{ op: "replace", value: { active: false } }] });
     expect(off.body.active).toBe(false);
     expect(app.db.prepare("SELECT COUNT(*) AS n FROM auth_sessions WHERE user_id = ?").get(id)).toEqual({ n: 0 });
-    expect((await owner.json<{ people: Array<{ id: string; status: string }> }>("/api/v1/people")).body.people.find((p) => p.id === id)?.status).toBe("disabled");
+    expect((await owner.json<{ people: Array<{ id: string; status: string }> }>("/api/v1/people")).body.people.find((p) => p.id === id)?.status).toBe(
+      "disabled",
+    );
 
-    const put = await scim<Json>("PUT", `/Users/${id}`, { userName: "ann@example.com", name: { formatted: "Ann Lee-Park" }, emails: [{ primary: true, value: "ann@example.com" }], active: true });
+    const put = await scim<Json>("PUT", `/Users/${id}`, {
+      userName: "ann@example.com",
+      name: { formatted: "Ann Lee-Park" },
+      emails: [{ primary: true, value: "ann@example.com" }],
+      active: true,
+    });
     expect(put.body).toMatchObject({ displayName: "Ann Lee-Park", active: true });
   });
 
@@ -119,7 +137,9 @@ describe("SCIM", () => {
     // Its members are the provider's: Identity's own screens cannot change them, and its people show the group.
     await scim("PUT", `/Groups/${gid}`, { displayName: "Operations", members: [{ value: ann }] });
     expect((await owner.json(`/api/v1/groups/${gid}/members`, { method: "PUT", body: { userIds: [] } })).status).toBe(409);
-    expect((await scim<{ groups: Array<{ display: string }> }>("GET", `/Users/${ann}`)).body.groups).toEqual([expect.objectContaining({ display: "Operations" })]);
+    expect((await scim<{ groups: Array<{ display: string }> }>("GET", `/Users/${ann}`)).body.groups).toEqual([
+      expect.objectContaining({ display: "Operations" }),
+    ]);
 
     expect((await scim("PATCH", `/Groups/${gid}`, { Operations: [{ op: "move", path: "x" }] })).status).toBe(400);
     expect((await scim("GET", '/Users?filter=name.givenName sw "A"')).status).toBe(400);
@@ -128,7 +148,16 @@ describe("SCIM", () => {
 
   it("writes what it did to the audit log, and stops with its token", async () => {
     const { events } = (await owner.json<{ events: Array<{ type: string; actor?: string }> }>("/api/v1/audit")).body;
-    expect(events.map((e) => e.type)).toEqual(expect.arrayContaining(["scim-user-created", "scim-user-deactivated", "scim-user-deleted", "scim-group-created", "scim-group-deleted", "scim-token-created"]));
+    expect(events.map((e) => e.type)).toEqual(
+      expect.arrayContaining([
+        "scim-user-created",
+        "scim-user-deactivated",
+        "scim-user-deleted",
+        "scim-group-created",
+        "scim-group-deleted",
+        "scim-token-created",
+      ]),
+    );
     expect((await owner.json("/api/v1/provisioning/token", { method: "DELETE" })).status).toBe(204);
     expect((await scim("GET", "/Users")).status).toBe(401);
   });

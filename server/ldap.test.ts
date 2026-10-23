@@ -47,7 +47,8 @@ describe.skipIf(!LDAP)("LDAP against lldap", () => {
     expect((await owner.json(`/api/v1/directories/${id}/check`, { body: {} })).body).toEqual({ ok: true, people: 2, groups: 1 });
     expect((await owner.json(`/api/v1/directories/${id}/sync`, { body: {} })).body).toEqual({ ok: true, people: 2, groups: 1, disabled: 0 });
 
-    const { people } = (await owner.json<{ people: Array<{ email: string; name: string; role: string; status: string; groups: string[] }> }>("/api/v1/people")).body;
+    const { people } = (await owner.json<{ people: Array<{ email: string; name: string; role: string; status: string; groups: string[] }> }>("/api/v1/people"))
+      .body;
     expect(people.filter((p) => p.role === "user").map((p) => [p.email, p.name, p.status, p.groups.join()])).toEqual([
       ["alice@example.com", "Alice Ader", "active", "openasy-ops"],
       ["bob@example.com", "Bob Bell", "active", ""],
@@ -56,7 +57,9 @@ describe.skipIf(!LDAP)("LDAP against lldap", () => {
 
   it("signs people in with the directory's password, and only that", async () => {
     const alice = new Browser(app.base);
-    expect((await alice.json<{ status: string }>("/api/v1/auth/login", { body: { email: "alice@example.com", password: "alice directory password" } })).body.status).toBe("signed-in");
+    expect(
+      (await alice.json<{ status: string }>("/api/v1/auth/login", { body: { email: "alice@example.com", password: "alice directory password" } })).body.status,
+    ).toBe("signed-in");
     expect((await alice.json<{ passwordManagedBy: string }>("/api/v1/auth/me")).body.passwordManagedBy).toBe("Example LDAP");
     expect((await new Browser(app.base).json("/api/v1/auth/login", { body: { email: "alice@example.com", password: "wrong" } })).status).toBe(401);
     // An empty password would be an anonymous bind, which LDAP servers accept: it is never sent.
@@ -67,7 +70,12 @@ describe.skipIf(!LDAP)("LDAP against lldap", () => {
   it("turns off people who leave the directory, and leaves the people who manage Identity alone", async () => {
     // The owner's email in the directory does not make them one of its people.
     const jwt = process.env.LLDAP_JWT!;
-    const gql = (query: string) => fetch("http://localhost:17170/api/graphql", { method: "POST", headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" }, body: JSON.stringify({ query }) });
+    const gql = (query: string) =>
+      fetch("http://localhost:17170/api/graphql", {
+        method: "POST",
+        headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
     await gql('mutation { createUser(user: {id: "olivia", email: "owner@example.com", displayName: "Not the owner"}) { id } }');
     await gql('mutation { deleteUser(userId: "bob") { ok } }');
     const r = (await owner.json<{ people: number; disabled: number }>(`/api/v1/directories/${id}/sync`, { body: {} })).body;
@@ -76,7 +84,9 @@ describe.skipIf(!LDAP)("LDAP against lldap", () => {
     const { people } = (await owner.json<{ people: Array<{ email: string; name: string; role: string; status: string }> }>("/api/v1/people")).body;
     expect(people.find((p) => p.email === "bob@example.com")?.status).toBe("disabled");
     expect(people.find((p) => p.email === "owner@example.com")).toMatchObject({ name: "Olivia Owner", role: "owner", status: "active" });
-    expect((await new Browser(app.base).json("/api/v1/auth/login", { body: { email: "bob@example.com", password: "bob directory password" } })).status).toBe(401);
+    expect((await new Browser(app.base).json("/api/v1/auth/login", { body: { email: "bob@example.com", password: "bob directory password" } })).status).toBe(
+      401,
+    );
   });
 
   it("turns its people off when it is removed", async () => {

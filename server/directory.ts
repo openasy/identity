@@ -87,7 +87,8 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     createdAt: r.created_at,
   });
   const groupRow = (id: string) => db.prepare("SELECT * FROM groups WHERE id = ?").get(id) as Parameters<typeof toGroup>[0] | undefined;
-  const listGroups = (): Group[] => (db.prepare("SELECT * FROM groups ORDER BY name COLLATE NOCASE").all() as Array<Parameters<typeof toGroup>[0]>).map(toGroup);
+  const listGroups = (): Group[] =>
+    (db.prepare("SELECT * FROM groups ORDER BY name COLLATE NOCASE").all() as Array<Parameters<typeof toGroup>[0]>).map(toGroup);
 
   function group(id: string): Group {
     const r = groupRow(id);
@@ -109,7 +110,8 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
 
   function syncedFrom(v: unknown): string | null {
     if (v === undefined || v === null || v === "") return null;
-    if (typeof v !== "string" || !/^[a-z0-9-]{1,32}:.{1,256}$/.test(v)) throw invalid('syncedFrom is "<provider id>:<group at the provider>", for example keycloak:ops-admins.');
+    if (typeof v !== "string" || !/^[a-z0-9-]{1,32}:.{1,256}$/.test(v))
+      throw invalid('syncedFrom is "<provider id>:<group at the provider>", for example keycloak:ops-admins.');
     return v;
   }
 
@@ -119,14 +121,22 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     const from = syncedFrom(b.syncedFrom);
     if (from && db.prepare("SELECT 1 FROM groups WHERE synced_from = ?").get(from)) throw new HttpProblem(409, "conflict", `A group already follows ${from}.`);
     const id = randomUUID();
-    db.prepare("INSERT INTO groups (id, name, description, synced_from, mfa, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, name, text(b.description, "description", 500, true) ?? "", from, mfa(b.mfa), now());
+    db.prepare("INSERT INTO groups (id, name, description, synced_from, mfa, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+      id,
+      name,
+      text(b.description, "description", 500, true) ?? "",
+      from,
+      mfa(b.mfa),
+      now(),
+    );
     return group(id);
   }
 
   function updateGroup(id: string, b: Record<string, unknown>): Group {
     const current = group(id);
     const name = text(b.name, "name", 100, true) ?? current.name;
-    if (name !== current.name && db.prepare("SELECT 1 FROM groups WHERE name = ? AND id != ?").get(name, id)) throw new HttpProblem(409, "conflict", `A group named ${name} exists.`);
+    if (name !== current.name && db.prepare("SELECT 1 FROM groups WHERE name = ? AND id != ?").get(name, id))
+      throw new HttpProblem(409, "conflict", `A group named ${name} exists.`);
     const description = b.description === undefined ? current.description : (text(b.description, "description", 500, true) ?? "");
     const from = b.syncedFrom === undefined ? current.syncedFrom : syncedFrom(b.syncedFrom);
     db.prepare("UPDATE groups SET name = ?, description = ?, synced_from = ?, mfa = ? WHERE id = ?").run(name, description, from, mfa(b.mfa, current.mfa), id);
@@ -140,9 +150,11 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
   }
 
   const groupsOf = (userId: string) =>
-    (db.prepare("SELECT g.name FROM group_members m JOIN groups g ON g.id = m.group_id WHERE m.user_id = ? ORDER BY g.name COLLATE NOCASE").all(userId) as Array<{ name: string }>).map(
-      (g) => g.name,
-    );
+    (
+      db
+        .prepare("SELECT g.name FROM group_members m JOIN groups g ON g.id = m.group_id WHERE m.user_id = ? ORDER BY g.name COLLATE NOCASE")
+        .all(userId) as Array<{ name: string }>
+    ).map((g) => g.name);
 
   function setMembers(groupId: string, userIds: unknown) {
     const g = group(groupId);
@@ -152,7 +164,8 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     db.exec("BEGIN");
     try {
       db.prepare("DELETE FROM group_members WHERE group_id = ?").run(groupId);
-      for (const u of new Set(userIds as string[])) db.prepare("INSERT INTO group_members (group_id, user_id, added_at) VALUES (?, ?, ?)").run(groupId, u, now());
+      for (const u of new Set(userIds as string[]))
+        db.prepare("INSERT INTO group_members (group_id, user_id, added_at) VALUES (?, ?, ?)").run(groupId, u, now());
       db.exec("COMMIT");
     } catch (err) {
       db.exec("ROLLBACK");
@@ -163,7 +176,10 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
 
   /** After a sign-in through a provider: groups that follow it get exactly the groups it sent. */
   function syncGroups(userId: string, provider: string, sent: string[]) {
-    const followed = db.prepare("SELECT id, synced_from FROM groups WHERE synced_from LIKE ?").all(`${provider}:%`) as Array<{ id: string; synced_from: string }>;
+    const followed = db.prepare("SELECT id, synced_from FROM groups WHERE synced_from LIKE ?").all(`${provider}:%`) as Array<{
+      id: string;
+      synced_from: string;
+    }>;
     const wanted = new Set(sent.map((g) => `${provider}:${g}`));
     for (const g of followed) {
       if (wanted.has(g.synced_from)) db.prepare("INSERT OR IGNORE INTO group_members (group_id, user_id, added_at) VALUES (?, ?, ?)").run(g.id, userId, now());
@@ -186,18 +202,25 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
       ...p,
       groups: groupsOf(p.id),
       secondFactor: second_factor === 1,
-      providers: (db.prepare("SELECT provider FROM auth_identities WHERE user_id = ? ORDER BY provider").all(p.id) as Array<{ provider: string }>).map((i) => i.provider),
+      providers: (db.prepare("SELECT provider FROM auth_identities WHERE user_id = ? ORDER BY provider").all(p.id) as Array<{ provider: string }>).map(
+        (i) => i.provider,
+      ),
     }));
 
   /** The most any of someone's groups asks of their sign-in to applications: a passkey, a second factor, or nothing. */
   function mfaRequired(userId: string): "passkey" | "required" | undefined {
-    const levels = (db.prepare("SELECT DISTINCT g.mfa FROM group_members m JOIN groups g ON g.id = m.group_id WHERE m.user_id = ?").all(userId) as Array<{ mfa: Group["mfa"] }>).map((r) => r.mfa);
+    const levels = (
+      db.prepare("SELECT DISTINCT g.mfa FROM group_members m JOIN groups g ON g.id = m.group_id WHERE m.user_id = ?").all(userId) as Array<{
+        mfa: Group["mfa"];
+      }>
+    ).map((r) => r.mfa);
     return levels.includes("passkey") ? "passkey" : levels.includes("required") ? "required" : undefined;
   }
 
   /** What applications learn about someone, by scope. Only active people sign in. */
   function account(userId: string) {
-    const r = db.prepare("SELECT id, email, name, status FROM auth_users WHERE id = ?").get(userId) as { id: string; email: string; name: string; status: string } | undefined;
+    const r = db.prepare("SELECT id, email, name, status FROM auth_users WHERE id = ?").get(userId) as
+      { id: string; email: string; name: string; status: string } | undefined;
     if (!r || r.status !== "active") return undefined;
     return { sub: r.id, email: r.email, email_verified: true, name: r.name, groups: groupsOf(r.id) };
   }
@@ -205,9 +228,11 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
   // ---- applications ---------------------------------------------------------------------------------------------
 
   const appGroups = (id: string) =>
-    (db.prepare("SELECT g.name FROM application_groups a JOIN groups g ON g.id = a.group_id WHERE a.application_id = ? ORDER BY g.name COLLATE NOCASE").all(id) as Array<{ name: string }>).map(
-      (g) => g.name,
-    );
+    (
+      db
+        .prepare("SELECT g.name FROM application_groups a JOIN groups g ON g.id = a.group_id WHERE a.application_id = ? ORDER BY g.name COLLATE NOCASE")
+        .all(id) as Array<{ name: string }>
+    ).map((g) => g.name);
   const toApp = (r: AppRow): Application => ({
     id: r.id,
     name: r.name,
@@ -278,11 +303,15 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     if (!TEMPLATES.includes(template)) throw invalid(`template must be one of ${TEMPLATES.join(", ")}.`);
     const name = text(b.name, "name", 100)!;
     const saml = SAML_TEMPLATES.has(template) ? samlSettings(b) : null;
-    if (saml && db.prepare("SELECT 1 FROM applications WHERE saml_entity_id = ?").get(saml.entityId)) throw new HttpProblem(409, "conflict", `An application with the entity ID ${saml.entityId} exists.`);
+    if (saml && db.prepare("SELECT 1 FROM applications WHERE saml_entity_id = ?").get(saml.entityId))
+      throw new HttpProblem(409, "conflict", `An application with the entity ID ${saml.entityId} exists.`);
     const redirectUris = saml ? [] : redirects(template, b);
     const post = b.postLogoutRedirectUris === undefined ? [] : uris(b.postLogoutRedirectUris, "postLogoutRedirectUris");
     if (b.everyone !== undefined && typeof b.everyone !== "boolean") throw invalid("everyone must be true or false.");
-    const id = `oa-${randomBytes(9).toString("base64url").toLowerCase().replace(/[^a-z0-9]/g, "x")}`;
+    const id = `oa-${randomBytes(9)
+      .toString("base64url")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "x")}`;
     const secret = `ois_${randomBytes(32).toString("base64url")}`;
     db.exec("BEGIN");
     try {
@@ -314,24 +343,19 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
   function updateApplication(id: string, b: Record<string, unknown>): Application {
     const current = application(id);
     const name = text(b.name, "name", 100, true) ?? current.name;
-    const redirectUris = current.saml || (b.redirectUris === undefined && b.url === undefined) ? current.redirectUris : redirects(current.template as Template, b);
+    const redirectUris =
+      current.saml || (b.redirectUris === undefined && b.url === undefined) ? current.redirectUris : redirects(current.template as Template, b);
     const saml = current.saml && samlSettings(b, current.saml);
-    if (saml && db.prepare("SELECT 1 FROM applications WHERE saml_entity_id = ? AND id != ?").get(saml.entityId, id)) throw new HttpProblem(409, "conflict", `An application with the entity ID ${saml.entityId} exists.`);
+    if (saml && db.prepare("SELECT 1 FROM applications WHERE saml_entity_id = ? AND id != ?").get(saml.entityId, id))
+      throw new HttpProblem(409, "conflict", `An application with the entity ID ${saml.entityId} exists.`);
     const post = b.postLogoutRedirectUris === undefined ? current.postLogoutRedirectUris : uris(b.postLogoutRedirectUris, "postLogoutRedirectUris");
     if (b.everyone !== undefined && typeof b.everyone !== "boolean") throw invalid("everyone must be true or false.");
     const everyone = b.everyone === undefined ? current.everyone : b.everyone;
     db.exec("BEGIN");
     try {
-      db.prepare("UPDATE applications SET name = ?, redirect_uris = ?, post_logout_redirect_uris = ?, everyone = ?, saml_entity_id = ?, saml_acs_url = ?, saml_name_id = ? WHERE id = ?").run(
-        name,
-        JSON.stringify(redirectUris),
-        JSON.stringify(post),
-        everyone ? 1 : 0,
-        saml?.entityId ?? null,
-        saml?.acsUrl ?? null,
-        saml?.nameId ?? null,
-        id,
-      );
+      db.prepare(
+        "UPDATE applications SET name = ?, redirect_uris = ?, post_logout_redirect_uris = ?, everyone = ?, saml_entity_id = ?, saml_acs_url = ?, saml_name_id = ? WHERE id = ?",
+      ).run(name, JSON.stringify(redirectUris), JSON.stringify(post), everyone ? 1 : 0, saml?.entityId ?? null, saml?.acsUrl ?? null, saml?.nameId ?? null, id);
       if (b.groups !== undefined) setAppGroups(id, b.groups);
       db.exec("COMMIT");
     } catch (err) {
@@ -375,7 +399,9 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     const r = appRow(applicationId);
     if (!r) return false;
     if (r.everyone === 1) return true;
-    return !!db.prepare("SELECT 1 FROM application_groups a JOIN group_members m ON m.group_id = a.group_id WHERE a.application_id = ? AND m.user_id = ?").get(applicationId, userId);
+    return !!db
+      .prepare("SELECT 1 FROM application_groups a JOIN group_members m ON m.group_id = a.group_id WHERE a.application_id = ? AND m.user_id = ?")
+      .get(applicationId, userId);
   }
 
   return {

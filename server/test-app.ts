@@ -26,7 +26,17 @@ export async function startApp(opts: Partial<AppOptions> & { version: string }) 
   const directory = createDirectory(db, keyring);
   const audit = createAudit(db);
   const directories = createDirectories({ db, keyring, audit });
-  const auth = createAuth({ db, product: "identity", productName: "OpenAsy Identity", origin: base, secretsKey: KEK, users: true, externalPasswords: { managedBy: directories.managedBy, verify: directories.verify }, onEvent: (e) => audit.record(e), onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups) });
+  const auth = createAuth({
+    db,
+    product: "identity",
+    productName: "OpenAsy Identity",
+    origin: base,
+    secretsKey: KEK,
+    users: true,
+    externalPasswords: { managedBy: directories.managedBy, verify: directories.verify },
+    onEvent: (e) => audit.record(e),
+    onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups),
+  });
   const oidc = createOidc({ db, keyring, directory, auth, audit, issuer: base });
   const scim = createScim({ db, audit, base });
   const saml = await createSaml({ db, keyring, directory, audit, issuer: base, signedIn: oidc.signedIn, missing: oidc.missing });

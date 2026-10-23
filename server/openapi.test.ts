@@ -45,7 +45,9 @@ async function call(method: string, path: string, init: RequestInit = {}, concre
   // A response is either inline or a $ref to components/responses; build the JSON pointer to its schema either way.
   const shared = declared!.$ref?.split("/").pop();
   const response = shared ? spec.components.responses[shared]! : declared!;
-  const at = shared ? `openapi#/components/responses/${shared}` : `openapi#/paths/${path.replaceAll("/", "~1")}/${method.toLowerCase()}/responses/${res.status}`;
+  const at = shared
+    ? `openapi#/components/responses/${shared}`
+    : `openapi#/paths/${path.replaceAll("/", "~1")}/${method.toLowerCase()}/responses/${res.status}`;
 
   if (!response.content) {
     expect(res.headers.get("content-length") ?? "0", `${method} ${path} ${res.status} should have no body`).toBe("0");
@@ -94,7 +96,12 @@ describe("responses match openapi.json", () => {
     const owner = await createOwner(app);
     const as = (b: Browser, body?: unknown, method?: string) => ({
       method,
-      headers: { origin: b.base, "user-agent": "Mozilla/5.0 (Macintosh) Chrome/141.0", cookie: [...b.cookies].map(([k, v]) => `${k}=${v}`).join("; "), "content-type": "application/json" },
+      headers: {
+        origin: b.base,
+        "user-agent": "Mozilla/5.0 (Macintosh) Chrome/141.0",
+        cookie: [...b.cookies].map(([k, v]) => `${k}=${v}`).join("; "),
+        "content-type": "application/json",
+      },
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
     await call("GET", "/api/v1/products", as(owner));
@@ -117,9 +124,23 @@ describe("responses match openapi.json", () => {
     await call("GET", "/api/v1/provisioning", as(owner));
     await call("POST", "/api/v1/provisioning/token", as(owner, {}));
     await call("DELETE", "/api/v1/provisioning/token", as(owner, undefined, "DELETE"));
-    const dir = (await call("POST", "/api/v1/directories", as(owner, { name: "AD", url: "ldaps://127.0.0.1:1", bindDn: "cn=reader", bindPassword: "x", baseDn: "dc=example,dc=com" }))).body as { id: string };
-    await call("POST", "/api/v1/directories", as(owner, { name: "AD", url: "ldaps://127.0.0.1:1", bindDn: "cn=reader", bindPassword: "x", baseDn: "dc=example,dc=com" }));
-    await call("POST", "/api/v1/directories", as(owner, { name: "Plain", url: "ldap://ad.example.com", bindDn: "cn=reader", bindPassword: "x", baseDn: "dc=example,dc=com" }));
+    const dir = (
+      await call(
+        "POST",
+        "/api/v1/directories",
+        as(owner, { name: "AD", url: "ldaps://127.0.0.1:1", bindDn: "cn=reader", bindPassword: "x", baseDn: "dc=example,dc=com" }),
+      )
+    ).body as { id: string };
+    await call(
+      "POST",
+      "/api/v1/directories",
+      as(owner, { name: "AD", url: "ldaps://127.0.0.1:1", bindDn: "cn=reader", bindPassword: "x", baseDn: "dc=example,dc=com" }),
+    );
+    await call(
+      "POST",
+      "/api/v1/directories",
+      as(owner, { name: "Plain", url: "ldap://ad.example.com", bindDn: "cn=reader", bindPassword: "x", baseDn: "dc=example,dc=com" }),
+    );
     await call("GET", "/api/v1/directories", as(owner));
     await call("PATCH", "/api/v1/directories/{id}", as(owner, { syncMinutes: 30 }), `/api/v1/directories/${dir.id}`);
     await call("PATCH", "/api/v1/directories/{id}", as(owner, { syncMinutes: 1 }), `/api/v1/directories/${dir.id}`);
@@ -132,10 +153,22 @@ describe("responses match openapi.json", () => {
     await call("GET", "/api/v1/audit", as(owner), "/api/v1/audit?type=group-added&limit=5");
     await call("GET", "/api/v1/audit", as(owner), "/api/v1/audit?limit=5000");
 
-    const created = (await call("POST", "/api/v1/applications", as(owner, { name: "VPN", template: "openasy-vpn", url: "https://vpn.example.com", groups: ["Engineering"] }))).body as { application: { id: string } };
+    const created = (
+      await call("POST", "/api/v1/applications", as(owner, { name: "VPN", template: "openasy-vpn", url: "https://vpn.example.com", groups: ["Engineering"] }))
+    ).body as { application: { id: string } };
     await call("POST", "/api/v1/applications", as(owner, { name: "Bad", redirectUris: ["ftp://x"] }));
-    const jira = (await call("POST", "/api/v1/applications", as(owner, { name: "Jira", template: "saml", entityId: "https://jira.example.com/sp", acsUrl: "https://jira.example.com/acs" }))).body as { application: { id: string } };
-    await call("POST", "/api/v1/applications", as(owner, { name: "Jira again", template: "saml", entityId: "https://jira.example.com/sp", acsUrl: "https://jira.example.com/acs" }));
+    const jira = (
+      await call(
+        "POST",
+        "/api/v1/applications",
+        as(owner, { name: "Jira", template: "saml", entityId: "https://jira.example.com/sp", acsUrl: "https://jira.example.com/acs" }),
+      )
+    ).body as { application: { id: string } };
+    await call(
+      "POST",
+      "/api/v1/applications",
+      as(owner, { name: "Jira again", template: "saml", entityId: "https://jira.example.com/sp", acsUrl: "https://jira.example.com/acs" }),
+    );
     await call("PATCH", "/api/v1/applications/{id}", as(owner, { nameId: "persistent" }), `/api/v1/applications/${jira.application.id}`);
     await call("GET", "/api/v1/applications", as(owner));
     await call("GET", "/api/v1/applications/{id}", as(owner), `/api/v1/applications/${created.application.id}`);
