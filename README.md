@@ -98,6 +98,14 @@ User for people nobody invited; they join the directory at their first sign-in. 
 The description lives in [`openapi.json`](./openapi.json) and is the contract: `server/openapi.test.ts` calls every
 operation and fails if a response does not match it.
 
+## Upgrade
+
+### To 0.2.0
+
+- Signing in to Identity itself through another provider uses the names every product shares (ADR 0002):
+  `IDENTITY_OIDC_ISSUER` is now `OPENASY_OIDC_ISSUER`, and so on for every `IDENTITY_OIDC_*`. Rename them before
+  upgrading: with the old names, sign-in through that provider is off and only passwords and passkeys work.
+
 ## Develop
 
 ```bash
@@ -114,7 +122,7 @@ Create the key once with `mkdir -p data && openssl rand -hex 32 > data/kek`. Nod
 
 1. Set `version` in `package.json`, merge to `main`.
 2. Push the tag: `git tag v0.1.0 && git push origin v0.1.0`.
-3. GitHub Actions tests, builds `linux/amd64` and `linux/arm64`, pushes `ghcr.io/openasy/identity:0.1.0` and `:0.1` to
+3. GitHub Actions tests, builds `linux/amd64` and `linux/arm64`, pushes `ghcr.io/openasy/identity:0.2.0` and `:0.1` to
    GitHub Container Registry (never `latest`), signs it, attaches the SBOM and provenance, and creates the GitHub release.
 
 ## Design decisions

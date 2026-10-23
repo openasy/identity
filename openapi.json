@@ -2,7 +2,7 @@
   "openapi": "3.1.1",
   "info": {
     "title": "OpenAsy Identity API",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "summary": "Single sign-on for OpenAsy products and any other application.",
     "description": "Every screen of Identity uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nThe OpenID provider is at `/.well-known/openid-configuration` and `/oidc/*` (ADR 0033); applications sign people in there. SAML 2.0 applications use `/saml/metadata` and `/saml/sso`. Identity providers provision people and groups with SCIM 2.0 at `/scim/v2`, with the token from `/api/v1/provisioning`. The operations below take the session of a signed-in person or an API token, and each names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003).\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
     "license": {
