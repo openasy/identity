@@ -11,7 +11,7 @@ import {
   type ProductId,
   useThemePreference,
 } from "@openasy/ui";
-import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAuth } from "@openasy/auth/react";
+import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAuth, useInstallBrand } from "@openasy/auth/react";
 import { AppWindow, ArrowRight, FolderTree, RefreshCw, KeyRound, LayoutDashboard, LogIn, LogOut, ScrollText, UserRound, Users, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { ProductLink } from "./api.ts";
@@ -208,10 +208,11 @@ function Product() {
 }
 
 export function App() {
+  const installBrand = useInstallBrand();
   const [theme] = useThemePreference();
   return (
-    // No organization until branding is configurable (ADR 0004); the library's default is a placeholder.
-    <BrandProvider theme={theme} brand={{ name: "OpenAsy", organization: undefined }} className="min-h-screen">
+    // The install's brand from config/brand.env (ADR 0053); OpenAsy's own look where it sets none.
+    <BrandProvider theme={theme} brand={{ name: "OpenAsy", organization: undefined, ...installBrand }} className="min-h-screen">
       <AuthGate product="OpenAsy Identity">
         <Product />
       </AuthGate>

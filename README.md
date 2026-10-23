@@ -103,8 +103,8 @@ operation and fails if a response does not match it.
 ### To 0.2.0
 
 - Signing in to Identity itself through another provider uses the names every product shares (ADR 0002):
-  `IDENTITY_OIDC_ISSUER` is now `OPENASY_OIDC_ISSUER`, and so on for every `IDENTITY_OIDC_*`. Rename them before
-  upgrading: with the old names, sign-in through that provider is off and only passwords and passkeys work.
+  `IDENTITY_OIDC_ISSUER` is now `OPENASY_OIDC_ISSUER`, and so on for every `IDENTITY_OIDC_*`. The old names still
+  work, with a warning in the log, and go in a later release: rename them.
 
 ## Develop
 

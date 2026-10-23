@@ -7,7 +7,7 @@
 # Keep openasy-kek apart from the volume, and with your backups: without it the signing keys cannot be opened.
 services:
   identity:
-    image: ghcr.io/openasy/identity:0.2.0
+    image: ghcr.io/openasy/identity:0.3.0
     restart: unless-stopped
     read_only: true
     ports:
