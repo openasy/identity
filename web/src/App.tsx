@@ -12,6 +12,7 @@ import {
   useThemePreference,
 } from "@openasy/ui";
 import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAuth, useInstallBrand } from "@openasy/auth/react";
+import colophon from "virtual:openasy-colophon";
 import { AppWindow, ArrowRight, FolderTree, RefreshCw, KeyRound, LayoutDashboard, LogIn, LogOut, ScrollText, UserRound, Users, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { ProductLink } from "./api.ts";
@@ -36,6 +37,7 @@ export const PAGES = [
   "provisioning",
   "directories",
   "tokens",
+  "about",
 ] as const;
 type Page = (typeof PAGES)[number];
 
@@ -140,6 +142,7 @@ function Product() {
   return (
     <AppShell
       product="identity"
+      about={colophon}
       nav={nav}
       activeNav={shown}
       onNavigate={(id) => navigate(`/${id}`)}
@@ -153,7 +156,7 @@ function Product() {
       theme={theme}
       onThemeChange={setTheme}
     >
-      {shown === "overview" ? (
+      {shown === "about" ? null : shown === "overview" ? (
         <OverviewPage call={call} />
       ) : shown === "audit" ? (
         <AuditPage call={call} />

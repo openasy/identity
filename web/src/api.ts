@@ -84,5 +84,8 @@ export interface Overview {
   appSignIns24h: number;
   refused24h: number;
   failedSignIns24h: number;
+  /** The last 24 hours, one count per hour, oldest first. */
+  hourly: { hours: string[]; appSignIns: number[]; refused: number[]; failedSignIns: number[] };
+  byApplication: Array<{ id: string; name: string; signIns: number }>;
   withoutSecondFactor: Array<{ id: string; name: string; email: string }>;
 }

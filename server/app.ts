@@ -322,6 +322,7 @@ export function createApp({ db, version, auth, directory, oidc, audit, scim, dir
       handle: () => {
         const day = new Date(Date.now() - 86_400_000).toISOString();
         const people = directory.listPeople();
+        const hourly = audit.hourly(["app-sign-in", "app-sign-in-refused", "sign-in-failed"]);
         return {
           people: people.length,
           applications: directory.listApplications().length,
@@ -329,6 +330,14 @@ export function createApp({ db, version, auth, directory, oidc, audit, scim, dir
           appSignIns24h: audit.count("app-sign-in", day),
           refused24h: audit.count("app-sign-in-refused", day),
           failedSignIns24h: audit.count("sign-in-failed", day),
+          // The same three per hour, for the charts on the overview.
+          hourly: {
+            hours: hourly.hours,
+            appSignIns: hourly.series["app-sign-in"],
+            refused: hourly.series["app-sign-in-refused"],
+            failedSignIns: hourly.series["sign-in-failed"],
+          },
+          byApplication: audit.byApplication(day).map((a) => ({ id: a.id, name: a.name ?? a.id, signIns: a.signIns })),
           // People who sign in with a password alone: no second factor, and no identity provider to ask for one.
           withoutSecondFactor: people
             .filter((p) => p.status === "active" && !p.secondFactor && p.providers.length === 0)

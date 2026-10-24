@@ -70,11 +70,41 @@ export function createAudit(db: DatabaseSync) {
 
   const count = (type: string, since: string) => (db.prepare("SELECT COUNT(*) AS n FROM audit WHERE type = ? AND at >= ?").get(type, since) as { n: number }).n;
 
+  /**
+   * Events of each type per hour, for the last `hours` hours up to and with the current one. `hours` holds the start
+   * of each hour; every series has one count per hour, oldest first.
+   */
+  function hourly(types: string[], hours = 24, now = Date.now()) {
+    const current = Math.floor(now / 3_600_000) * 3_600_000;
+    const starts = Array.from({ length: hours }, (_, i) => new Date(current - (hours - 1 - i) * 3_600_000).toISOString());
+    const index = new Map(starts.map((s, i) => [s.slice(0, 13), i]));
+    const series = Object.fromEntries(types.map((t) => [t, Array.from({ length: hours }, () => 0)]));
+    const rows = db
+      .prepare(
+        `SELECT type, substr(at, 1, 13) AS hour, COUNT(*) AS n FROM audit WHERE at >= ? AND type IN (${types.map(() => "?").join(", ")}) GROUP BY type, hour`,
+      )
+      .all(starts[0]!, ...types) as Array<{ type: string; hour: string; n: number }>;
+    for (const r of rows) {
+      const i = index.get(r.hour);
+      if (i !== undefined) series[r.type]![i] = r.n;
+    }
+    return { hours: starts, series };
+  }
+
+  /** The applications people signed in to most since a time, with how often. */
+  const byApplication = (since: string, limit = 7) =>
+    db
+      .prepare(
+        `SELECT a.application AS id, p.name AS name, COUNT(*) AS signIns FROM audit a LEFT JOIN applications p ON p.id = a.application
+         WHERE a.type = 'app-sign-in' AND a.at >= ? AND a.application IS NOT NULL GROUP BY a.application ORDER BY signIns DESC, name LIMIT ?`,
+      )
+      .all(since, limit) as Array<{ id: string; name: string | null; signIns: number }>;
+
   function purge() {
     db.prepare("DELETE FROM audit WHERE at < ?").run(new Date(Date.now() - KEEP_DAYS * 86_400_000).toISOString());
   }
 
-  return { record, list, count, purge };
+  return { record, list, count, hourly, byApplication, purge };
 }
 
 export type Audit = ReturnType<typeof createAudit>;

@@ -1,4 +1,4 @@
-import { Button, EmptyState, KpiCard, KpiGrid, navigate, PageHeader, Panel, SelectField, useAgo, type Column } from "@openasy/ui";
+import { BarList, Button, EmptyState, KpiCard, KpiGrid, navigate, PageHeader, Panel, SelectField, TimeSeriesChart, useAgo, type Column } from "@openasy/ui";
 import { useState } from "react";
 import type { AuditEvent, Overview } from "./api.ts";
 import { List, useData, type Call } from "./shared.tsx";
@@ -62,9 +62,21 @@ export function OverviewPage({ call }: { call: Call }) {
     <>
       <PageHeader title={t("overviewPage.overview")} description={t("overviewPage.singleSignOnForOpenasy")} />
       <KpiGrid>
-        <KpiCard label={t("overviewPage.signInsToApplications24")} value={o?.appSignIns24h ?? "–"} />
-        <KpiCard label={t("overviewPage.refused24H")} value={o?.refused24h ?? "–"} tone={o?.refused24h ? "warning" : undefined} />
-        <KpiCard label={t("overviewPage.failedSignIns24H")} value={o?.failedSignIns24h ?? "–"} tone={o?.failedSignIns24h ? "danger" : undefined} />
+        <KpiCard label={t("overviewPage.signInsToApplications24")} value={o?.appSignIns24h ?? "–"} trend={o?.hourly.appSignIns} />
+        <KpiCard
+          label={t("overviewPage.refused24H")}
+          value={o?.refused24h ?? "–"}
+          tone={o?.refused24h ? "warning" : undefined}
+          trend={o?.refused24h ? o.hourly.refused : undefined}
+          trendColor="var(--oa-warning)"
+        />
+        <KpiCard
+          label={t("overviewPage.failedSignIns24H")}
+          value={o?.failedSignIns24h ?? "–"}
+          tone={o?.failedSignIns24h ? "danger" : undefined}
+          trend={o?.failedSignIns24h ? o.hourly.failedSignIns : undefined}
+          trendColor="var(--oa-danger)"
+        />
         <KpiCard
           label={t("overviewPage.withoutASecondFactor")}
           value={o?.withoutSecondFactor.length ?? "–"}
@@ -84,23 +96,49 @@ export function OverviewPage({ call }: { call: Call }) {
           {t("overviewPage.addAnApplicationChooseThe")}
         </EmptyState>
       ) : (
-        <Panel
-          title={t("overviewPage.latestSignInsToApplications")}
-          flush
-          actions={
-            <Button size="sm" variant="ghost" onClick={() => navigate("/audit")}>
-              {t("overviewPage.auditLog")}
-            </Button>
-          }
-        >
-          <List
-            label={t("overviewPage.latestSignInsToApplications")}
-            rows={recent}
-            columns={eventColumns(t, ago).filter((c) => c.id !== "detail")}
-            empty={t("overviewPage.nobodySignedInToAn")}
-            getRowId={(e) => String(e.id)}
-          />
-        </Panel>
+        <>
+          {o && (
+            <div className="grid gap-2.5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <Panel title={t("overviewPage.signInsPerHour")} description={t("overviewPage.last24HoursAllApplications")}>
+                <TimeSeriesChart
+                  label={t("overviewPage.signInsPerHour")}
+                  labels={o.hourly.hours.map((h) => new Date(h).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}
+                  height={200}
+                  stacked
+                  series={[
+                    { id: "signed-in", name: t("overviewPage.signedIn"), data: o.hourly.appSignIns },
+                    { id: "refused", name: t("overviewPage.refused"), data: o.hourly.refused, color: "var(--oa-warning)" },
+                    { id: "failed", name: t("overviewPage.failed"), data: o.hourly.failedSignIns, color: "var(--oa-danger)" },
+                  ]}
+                />
+              </Panel>
+              <Panel title={t("overviewPage.signInsByApplication")} description={t("overviewPage.last24Hours")}>
+                {o.byApplication.length ? (
+                  <BarList label={t("overviewPage.signInsByApplication")} items={o.byApplication.map((a) => ({ id: a.id, label: a.name, value: a.signIns }))} />
+                ) : (
+                  <p className="m-0 text-sm text-fg-muted">{t("overviewPage.nobodySignedInToAn")}</p>
+                )}
+              </Panel>
+            </div>
+          )}
+          <Panel
+            title={t("overviewPage.latestSignInsToApplications")}
+            flush
+            actions={
+              <Button size="sm" variant="ghost" onClick={() => navigate("/audit")}>
+                {t("overviewPage.auditLog")}
+              </Button>
+            }
+          >
+            <List
+              label={t("overviewPage.latestSignInsToApplications")}
+              rows={recent}
+              columns={eventColumns(t, ago).filter((c) => c.id !== "detail")}
+              empty={t("overviewPage.nobodySignedInToAn")}
+              getRowId={(e) => String(e.id)}
+            />
+          </Panel>
+        </>
       )}
       {o && o.withoutSecondFactor.length > 0 && (
         <Panel title={t("overviewPage.signInWithAPassword")} description={t("overviewPage.noAuthenticatorAppNoPasskey")}>

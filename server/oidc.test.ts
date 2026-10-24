@@ -193,6 +193,14 @@ describe("the audit log", () => {
     // A sign-in counts once the application exchanged its code: one test here does.
     expect(o.appSignIns24h).toBe(1);
     expect(o.refused24h).toBeGreaterThanOrEqual(1);
+    // The same counts per hour for the charts: 24 hours up to the current one, where everything here happened.
+    const hourly = o.hourly as { hours: string[]; appSignIns: number[]; refused: number[]; failedSignIns: number[] };
+    expect(hourly.hours).toHaveLength(24);
+    expect(hourly.hours.at(-1)!.slice(0, 13)).toBe(new Date().toISOString().slice(0, 13));
+    for (const s of [hourly.appSignIns, hourly.refused, hourly.failedSignIns]) expect(s).toHaveLength(24);
+    expect(hourly.appSignIns.reduce((a, b) => a + b, 0)).toBe(1);
+    expect(hourly.refused.reduce((a, b) => a + b, 0)).toBe(o.refused24h);
+    expect(o.byApplication).toEqual([{ id: expect.any(String), name: expect.any(String), signIns: 1 }]);
     // Uma has an authenticator app now and the owner had one from the start.
     expect(o.withoutSecondFactor).toEqual([]);
   });
