@@ -165,7 +165,12 @@
     "auditLog": "Denetim kaydı",
     "nobodySignedInToAn": "Henüz kimse bir uygulamaya oturum açmadı",
     "signInWithAPassword": "Yalnızca parolayla oturum açanlar",
-    "noAuthenticatorAppNoPasskey": "Doğrulama uygulaması, geçiş anahtarı ya da kimlik sağlayıcısı yok. İkinci doğrulama isteyen gruplar onları bir tane eklemeye yönlendirir."
+    "noAuthenticatorAppNoPasskey": "Doğrulama uygulaması, geçiş anahtarı ya da kimlik sağlayıcısı yok. İkinci doğrulama isteyen gruplar onları bir tane eklemeye yönlendirir.",
+    "outcomes": "Sonuçlar",
+    "attempts": "deneme",
+    "secondFactor": "İkinci faktör",
+    "secondFactorDetail": "Parolanın yanında doğrulayıcı uygulama ya da passkey ile giriş yapan kişiler.",
+    "peopleWithSecondFactor": "{{people}} kişiden {{n}}"
   },
   "auditPage": {
     "auditLog": "Denetim kaydı",

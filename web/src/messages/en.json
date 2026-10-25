@@ -165,7 +165,12 @@
     "auditLog": "Audit log",
     "nobodySignedInToAn": "Nobody signed in to an application yet",
     "signInWithAPassword": "Sign in with a password alone",
-    "noAuthenticatorAppNoPasskey": "No authenticator app, no passkey and no identity provider. Groups that require a second factor send them to add one."
+    "noAuthenticatorAppNoPasskey": "No authenticator app, no passkey and no identity provider. Groups that require a second factor send them to add one.",
+    "outcomes": "Outcomes",
+    "attempts": "attempts",
+    "secondFactor": "Second factor",
+    "secondFactorDetail": "People who sign in with an authenticator app or a passkey as well as a password.",
+    "peopleWithSecondFactor": "{{n}} of {{people}} people"
   },
   "auditPage": {
     "auditLog": "Audit log",

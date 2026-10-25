@@ -1,4 +1,22 @@
-import { BarList, Button, EmptyState, KpiCard, KpiGrid, navigate, PageHeader, Panel, SelectField, TimeSeriesChart, useAgo, type Column } from "@openasy/ui";
+import {
+  BarList,
+  Button,
+  EmptyState,
+  KpiCard,
+  KpiGrid,
+  navigate,
+  PageHeader,
+  Panel,
+  SelectField,
+  TimeSeriesChart,
+  useAgo,
+  DonutChart,
+  Gauge,
+  OverviewGrid,
+  TONE_COLORS,
+  type Column,
+} from "@openasy/ui";
+import { Ban, CircleX, LogIn, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import type { AuditEvent, Overview } from "./api.ts";
 import { List, useData, type Call } from "./shared.tsx";
@@ -62,10 +80,11 @@ export function OverviewPage({ call }: { call: Call }) {
     <>
       <PageHeader title={t("overviewPage.overview")} description={t("overviewPage.singleSignOnForOpenasy")} />
       <KpiGrid>
-        <KpiCard label={t("overviewPage.signInsToApplications24")} value={o?.appSignIns24h ?? "–"} trend={o?.hourly.appSignIns} />
+        <KpiCard label={t("overviewPage.signInsToApplications24")} value={o?.appSignIns24h ?? "–"} icon={LogIn} trend={o?.hourly.appSignIns} />
         <KpiCard
           label={t("overviewPage.refused24H")}
           value={o?.refused24h ?? "–"}
+          icon={Ban}
           tone={o?.refused24h ? "warning" : undefined}
           trend={o?.refused24h ? o.hourly.refused : undefined}
           trendColor="var(--oa-warning)"
@@ -73,6 +92,7 @@ export function OverviewPage({ call }: { call: Call }) {
         <KpiCard
           label={t("overviewPage.failedSignIns24H")}
           value={o?.failedSignIns24h ?? "–"}
+          icon={CircleX}
           tone={o?.failedSignIns24h ? "danger" : undefined}
           trend={o?.failedSignIns24h ? o.hourly.failedSignIns : undefined}
           trendColor="var(--oa-danger)"
@@ -80,6 +100,7 @@ export function OverviewPage({ call }: { call: Call }) {
         <KpiCard
           label={t("overviewPage.withoutASecondFactor")}
           value={o?.withoutSecondFactor.length ?? "–"}
+          icon={ShieldCheck}
           unit={o ? t("overviewPage.ofPeople", { people: o.people }) : undefined}
           tone={o?.withoutSecondFactor.length ? "warning" : "success"}
         />
@@ -98,28 +119,55 @@ export function OverviewPage({ call }: { call: Call }) {
       ) : (
         <>
           {o && (
-            <div className="grid gap-2.5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-              <Panel title={t("overviewPage.signInsPerHour")} description={t("overviewPage.last24HoursAllApplications")}>
-                <TimeSeriesChart
-                  label={t("overviewPage.signInsPerHour")}
-                  labels={o.hourly.hours.map((h) => new Date(h).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}
-                  height={200}
-                  stacked
-                  series={[
-                    { id: "signed-in", name: t("overviewPage.signedIn"), data: o.hourly.appSignIns },
-                    { id: "refused", name: t("overviewPage.refused"), data: o.hourly.refused, color: "var(--oa-warning)" },
-                    { id: "failed", name: t("overviewPage.failed"), data: o.hourly.failedSignIns, color: "var(--oa-danger)" },
-                  ]}
-                />
-              </Panel>
-              <Panel title={t("overviewPage.signInsByApplication")} description={t("overviewPage.last24Hours")}>
-                {o.byApplication.length ? (
-                  <BarList label={t("overviewPage.signInsByApplication")} items={o.byApplication.map((a) => ({ id: a.id, label: a.name, value: a.signIns }))} />
-                ) : (
-                  <p className="m-0 text-sm text-fg-muted">{t("overviewPage.nobodySignedInToAn")}</p>
-                )}
-              </Panel>
-            </div>
+            <>
+              <OverviewGrid>
+                <Panel title={t("overviewPage.signInsPerHour")} description={t("overviewPage.last24HoursAllApplications")}>
+                  <TimeSeriesChart
+                    label={t("overviewPage.signInsPerHour")}
+                    labels={o.hourly.hours.map((h) => new Date(h).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}
+                    height={200}
+                    stacked
+                    series={[
+                      { id: "signed-in", name: t("overviewPage.signedIn"), data: o.hourly.appSignIns },
+                      { id: "refused", name: t("overviewPage.refused"), data: o.hourly.refused, color: "var(--oa-warning)" },
+                      { id: "failed", name: t("overviewPage.failed"), data: o.hourly.failedSignIns, color: "var(--oa-danger)" },
+                    ]}
+                  />
+                </Panel>
+                <Panel title={t("overviewPage.outcomes")} description={t("overviewPage.last24Hours")}>
+                  <DonutChart
+                    label={t("overviewPage.outcomes")}
+                    caption={t("overviewPage.attempts")}
+                    slices={[
+                      { id: "signed-in", name: t("overviewPage.signedIn"), value: o.appSignIns24h, color: TONE_COLORS.success },
+                      { id: "refused", name: t("overviewPage.refused"), value: o.refused24h, color: TONE_COLORS.warning },
+                      { id: "failed", name: t("overviewPage.failed"), value: o.failedSignIns24h, color: TONE_COLORS.danger },
+                    ]}
+                  />
+                </Panel>
+              </OverviewGrid>
+              <OverviewGrid>
+                <Panel title={t("overviewPage.signInsByApplication")} description={t("overviewPage.last24Hours")}>
+                  {o.byApplication.length ? (
+                    <BarList
+                      label={t("overviewPage.signInsByApplication")}
+                      items={o.byApplication.map((a) => ({ id: a.id, label: a.name, value: a.signIns }))}
+                    />
+                  ) : (
+                    <p className="m-0 text-sm text-fg-muted">{t("overviewPage.nobodySignedInToAn")}</p>
+                  )}
+                </Panel>
+                <Panel title={t("overviewPage.secondFactor")} description={t("overviewPage.secondFactorDetail")}>
+                  <Gauge
+                    label={t("overviewPage.secondFactor")}
+                    value={o.people - o.withoutSecondFactor.length}
+                    max={Math.max(1, o.people)}
+                    tone={o.withoutSecondFactor.length ? "warning" : "success"}
+                    caption={t("overviewPage.peopleWithSecondFactor", { n: o.people - o.withoutSecondFactor.length, people: o.people })}
+                  />
+                </Panel>
+              </OverviewGrid>
+            </>
           )}
           <Panel
             title={t("overviewPage.latestSignInsToApplications")}

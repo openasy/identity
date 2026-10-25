@@ -165,7 +165,12 @@
     "auditLog": "Audit-Log",
     "nobodySignedInToAn": "Noch hat sich niemand bei einer Anwendung angemeldet",
     "signInWithAPassword": "Melden sich nur mit Passwort an",
-    "noAuthenticatorAppNoPasskey": "Keine Authenticator-App, kein Passkey und kein Identitätsanbieter. Gruppen, die einen zweiten Faktor verlangen, schicken sie, einen hinzuzufügen."
+    "noAuthenticatorAppNoPasskey": "Keine Authenticator-App, kein Passkey und kein Identitätsanbieter. Gruppen, die einen zweiten Faktor verlangen, schicken sie, einen hinzuzufügen.",
+    "outcomes": "Ergebnisse",
+    "attempts": "Versuche",
+    "secondFactor": "Zweiter Faktor",
+    "secondFactorDetail": "Personen, die sich zusätzlich zum Passwort mit einer Authenticator-App oder einem Passkey anmelden.",
+    "peopleWithSecondFactor": "{{n}} von {{people}} Personen"
   },
   "auditPage": {
     "auditLog": "Audit-Log",
