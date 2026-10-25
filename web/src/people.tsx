@@ -4,9 +4,15 @@ import { Check, UserPlus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { Person } from "./api.ts";
 import { Code, List, Problem, useAction, useData, type Call } from "./shared.tsx";
-import { useT } from "./i18n.ts";
+import { useT, type T } from "./i18n.ts";
 
-const ROLE: Record<Person["role"], string> = { user: "User", viewer: "Viewer", editor: "Editor", admin: "Admin", owner: "Owner" };
+const ROLE = (t: T): Record<Person["role"], string> => ({
+  user: t("roles.user"),
+  viewer: t("roles.viewer"),
+  editor: t("roles.editor"),
+  admin: t("roles.admin"),
+  owner: t("roles.owner"),
+});
 
 /** The directory: everyone who can sign in to applications, and their groups. */
 export function PeoplePage({ call }: { call: Call }) {
@@ -36,13 +42,13 @@ export function PeoplePage({ call }: { call: Call }) {
       id: "role",
       header: t("peoplePage.managesIdentity"),
       width: "150px",
-      cell: (p) => (p.role === "user" ? <span className="text-fg-muted">{t("peoplePage.no")}</span> : ROLE[p.role]),
+      cell: (p) => (p.role === "user" ? <span className="text-fg-muted">{t("peoplePage.no")}</span> : ROLE(t)[p.role]),
     },
     {
       id: "status",
       header: t("peoplePage.status"),
       width: "110px",
-      cell: (p) => <Badge tone={p.status === "active" ? "success" : p.status === "invited" ? "info" : "neutral"}>{p.status}</Badge>,
+      cell: (p) => <Badge tone={p.status === "active" ? "success" : p.status === "invited" ? "info" : "neutral"}>{t(`personStatus.${p.status}`)}</Badge>,
     },
     { id: "groups", header: t("peoplePage.groups"), cell: (p) => p.groups.join(", ") || <span className="text-fg-muted">none</span> },
   ];

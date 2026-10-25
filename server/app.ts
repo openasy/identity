@@ -145,7 +145,8 @@ export function createApp({ db, version, auth, directory, oidc, audit, scim, dir
 
   const routes: Route[] = [
     { method: "GET", path: "/api/v1/version", auth: "none", handle: () => ({ product: "identity", version }) },
-    { method: "GET", path: "/api/v1/products", auth: "viewer", handle: () => ({ products }) },
+    // Everyone signed in reads them: the way back to the product that sent someone here is one of them.
+    { method: "GET", path: "/api/v1/products", auth: "user", handle: () => ({ products }) },
 
     // Applications people sign in to (OpenID Connect clients). Admins change them: they decide who gets in.
     {

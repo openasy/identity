@@ -69,10 +69,11 @@ export function useAction() {
 
 export const date = (iso: string) => new Date(iso).toLocaleDateString();
 
-export function Problem({ error, title = "That did not work" }: { error?: string; title?: string }) {
+export function Problem({ error, title }: { error?: string; title?: string }) {
+  const t = useT();
   if (!error) return null;
   return (
-    <Callout tone="danger" title={title}>
+    <Callout tone="danger" title={title ?? t("problem.thatDidNotWork")}>
       {error}
     </Callout>
   );

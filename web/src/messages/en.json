@@ -20,7 +20,9 @@
     "addASecondFactorTo": "Add a second factor to continue",
     "theApplicationYouAreSigning": "The application you are signing in to accepts only a passkey. Add one below, or sign out and sign in again with yours, then continue.",
     "theApplicationYouAreSigning2": "The application you are signing in to asks for one. Add an authenticator app or a passkey below, then continue.",
-    "continueToTheApplication": "Continue to the application"
+    "continueToTheApplication": "Continue to the application",
+    "youCameFrom": "You came here from {{product}}",
+    "backTo": "Back to {{product}}"
   },
   "samlDetails": {
     "identityForSaml": "Identity for SAML",
@@ -138,7 +140,8 @@
     "engineering": "Engineering",
     "membersFromAProvider": "Members from a provider",
     "optionalProviderIdGroupThere": "Optional: <provider id>:<group there>. Members then follow that group at each sign-in.",
-    "noGroupsYet": "No groups yet"
+    "noGroupsYet": "No groups yet",
+    "chosenHere": "Chosen here"
   },
   "overviewPage": {
     "overview": "Overview",
@@ -262,5 +265,39 @@
     "detail": "Detail",
     "from": "From",
     "unknown": "unknown"
+  },
+  "search": {
+    "person": "Person",
+    "group": "Group",
+    "application": "Application",
+    "groupDetail": "{{members}} members"
+  },
+  "problem": {
+    "thatDidNotWork": "That did not work"
+  },
+  "roles": {
+    "user": "User",
+    "viewer": "Viewer",
+    "editor": "Editor",
+    "admin": "Admin",
+    "owner": "Owner"
+  },
+  "settings": {
+    "account": "Account",
+    "accountText": "Your profile, password, two-step verification and where you are signed in.",
+    "members": "Members",
+    "signin": "Sign-in",
+    "tokens": "API tokens",
+    "membersText": "Who can manage this Identity, and with which role. Viewers see everything; editors also change groups; admins also manage applications, providers, members and tokens. People with the User role only sign in to applications.",
+    "signinText": "Identity providers people can sign in to Identity with, such as Keycloak or Microsoft Entra ID, and which of their groups give which role.",
+    "tokensText": "For scripts. Each token has one role and an expiry; the secret is shown once."
+  },
+  "personStatus": {
+    "invited": "Invited",
+    "active": "Active",
+    "disabled": "Disabled"
+  },
+  "directoryDialog": {
+    "startTlsHint": "Encrypt an ldap:// connection before the password is sent."
   }
 }

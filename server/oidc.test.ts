@@ -240,3 +240,20 @@ describe("the directory", () => {
     expect((await owner.json("/api/v1/applications", { body: { name: "Bad", redirectUris: ["http://evil.example.com/cb"] } })).status).toBe(422);
   });
 });
+
+describe("preferences for the applications (ADR 0033)", () => {
+  it("lets an application's pages read and change the theme and language people chose here", async () => {
+    const from = (origin: string, method = "GET", body?: unknown) => uma.browser.fetch("/api/v1/auth/me/preferences", { method, body, headers: { origin } });
+    const grafana = new URL(CALLBACK).origin;
+    const read = await from(grafana);
+    expect(read.headers.get("access-control-allow-origin")).toBe(grafana);
+    expect(await read.json()).toMatchObject({ name: "Uma", theme: null, locale: null });
+    expect((await from(grafana, "PATCH", { theme: "dark", locale: "de" })).status).toBe(200);
+    expect(await (await uma.browser.fetch("/api/v1/auth/me/preferences")).json()).toMatchObject({ theme: "dark", locale: "de" });
+    // A site that is not an application gets no answer it can read, and cannot change them.
+    expect((await from("https://evil.example.com")).headers.get("access-control-allow-origin")).toBeNull();
+    expect((await from("https://evil.example.com", "PATCH", { theme: "light" })).status).toBe(403);
+    // The way back to the product that sent them here needs the products: everyone signed in reads them.
+    expect((await uma.browser.json("/api/v1/products")).status).toBe(200);
+  });
+});

@@ -120,12 +120,7 @@ function AddDirectory({ call, onAdded, onCancel }: { call: Call; onAdded: () => 
         {field("groupFilter", "Groups filter", { hint: t("addDirectory.groupsThatMatchFollowThe") })}
         {field("syncMinutes", "Read every (minutes)", { mono: false, hint: t("addDirectory.from5To1440Default") })}
       </div>
-      <Checkbox
-        label="StartTLS"
-        description="Encrypt an ldap:// connection before the password is sent."
-        checked={startTls}
-        onChange={(e) => setStartTls(e.target.checked)}
-      />
+      <Checkbox label="StartTLS" description={t("directoryDialog.startTlsHint")} checked={startTls} onChange={(e) => setStartTls(e.target.checked)} />
       <Problem error={action.error} title={t("addDirectory.notAdded")} />
     </Dialog>
   );

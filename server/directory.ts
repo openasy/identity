@@ -422,6 +422,18 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
     newSecret,
     deleteApplication,
     clientMetadata,
+    /** The origins of the OpenID applications' redirect URIs: their pages may read and change people's preferences (ADR 0033). */
+    applicationOrigins(): Set<string> {
+      const out = new Set<string>();
+      for (const r of db.prepare("SELECT redirect_uris FROM applications WHERE protocol = 'oidc'").all() as Array<{ redirect_uris: string }>)
+        for (const uri of JSON.parse(r.redirect_uris) as string[])
+          try {
+            out.add(new URL(uri).origin);
+          } catch {
+            // A redirect URI that is not a URL names no page.
+          }
+      return out;
+    },
     samlApplication: (entityId: string) => (db.prepare("SELECT id FROM applications WHERE saml_entity_id = ?").get(entityId) as { id: string } | undefined)?.id,
     mayUse,
   };

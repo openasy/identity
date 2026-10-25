@@ -36,6 +36,7 @@ export async function startApp(opts: Partial<AppOptions> & { version: string }) 
     externalPasswords: { managedBy: directories.managedBy, verify: directories.verify },
     onEvent: (e) => audit.record(e),
     onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups),
+    preferenceOrigins: () => directory.applicationOrigins(),
   });
   const oidc = createOidc({ db, keyring, directory, auth, audit, issuer: base });
   const scim = createScim({ db, audit, base });
@@ -55,7 +56,7 @@ export class Browser {
   constructor(base: string) {
     this.base = base;
   }
-  async fetch(url: string, init: { method?: string; body?: unknown } = {}) {
+  async fetch(url: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
     const res = await fetch(url.startsWith("http") ? url : this.base + url, {
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
       redirect: "manual",
@@ -64,6 +65,7 @@ export class Browser {
         "user-agent": UA,
         cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; "),
         ...(init.body !== undefined && { "content-type": "application/json" }),
+        ...init.headers,
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });

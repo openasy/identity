@@ -59,7 +59,7 @@
           "Product"
         ],
         "summary": "Other OpenAsy products",
-        "description": "The OpenAsy products of this install and their addresses, from `OPENASY_PRODUCTS`, for the product switcher. Empty when it is not set.\n\nNeeds the viewer role.",
+        "description": "The OpenAsy products of this install and their addresses, from `OPENASY_PRODUCTS`, for the product switcher and the way back to the product that sent someone here. Empty when it is not set.\n\nAnyone signed in.",
         "security": [
           {
             "session": []
@@ -89,7 +89,7 @@
             "$ref": "#/components/responses/Problem"
           }
         },
-        "x-openasy-role": "viewer"
+        "x-openasy-role": "user"
       }
     },
     "/api/v1/applications": {
@@ -1362,7 +1362,7 @@
       "apiToken": {
         "type": "http",
         "scheme": "bearer",
-        "description": "An API token created under Settings → API tokens (`oa_identity_...`): one role, always an expiry (ADR 0003)."
+        "description": "An API token created under Settings \u2192 API tokens (`oa_identity_...`): one role, always an expiry (ADR 0003)."
       }
     },
     "responses": {

@@ -51,6 +51,8 @@ const auth = createAuth({
   productName: "OpenAsy Identity",
   origin: publicUrl,
   trustedOrigins: publicUrl.startsWith("http://localhost:") ? [publicUrl.replace("localhost", "127.0.0.1")] : [],
+  // The applications show the theme and language people chose here (ADR 0033).
+  preferenceOrigins: () => directory.applicationOrigins(),
   passwords: process.env.IDENTITY_PASSWORD_SIGN_IN !== "false",
   // The directory: people who sign in to applications have the user role and do not manage Identity.
   users: true,

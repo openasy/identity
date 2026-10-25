@@ -80,7 +80,7 @@ export function GroupsPage({ call }: { call: Call }) {
       id: "source",
       header: t("groupsPage.membersFrom"),
       width: "200px",
-      cell: (g) => (g.syncedFrom ? <Badge tone="info">{g.syncedFrom}</Badge> : "Chosen here"),
+      cell: (g) => (g.syncedFrom ? <Badge tone="info">{g.syncedFrom}</Badge> : t("groupsPage.chosenHere")),
     },
     {
       id: "mfa",

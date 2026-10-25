@@ -7,14 +7,31 @@ import {
   navigate,
   PageHeader,
   PRODUCT_IDS,
+  PRODUCTS,
   usePath,
   type ProductId,
   useThemePreference,
+  toLocale,
+  useLocalePreference,
 } from "@openasy/ui";
-import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAuth, useInstallBrand } from "@openasy/auth/react";
+import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAccountMenu, useAuth, useInstallBrand } from "@openasy/auth/react";
 import colophon from "virtual:openasy-colophon";
-import { AppWindow, ArrowRight, FolderTree, RefreshCw, KeyRound, LayoutDashboard, LogIn, LogOut, ScrollText, UserRound, Users, UsersRound } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  AppWindow,
+  ArrowLeft,
+  ArrowRight,
+  FolderTree,
+  RefreshCw,
+  KeyRound,
+  LayoutDashboard,
+  LogIn,
+  LogOut,
+  ScrollText,
+  UserRound,
+  Users,
+  UsersRound,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ProductLink } from "./api.ts";
 import { ApplicationsPage } from "./applications.tsx";
 import { DirectoriesPage } from "./directories.tsx";
@@ -23,7 +40,8 @@ import { AuditPage, OverviewPage } from "./overview.tsx";
 import { PeoplePage } from "./people.tsx";
 import { ProvisioningPage } from "./provisioning.tsx";
 import { useApi } from "./shared.tsx";
-import { useT } from "./i18n.ts";
+import { useT, type T } from "./i18n.ts";
+import { search } from "./search.ts";
 
 export const PAGES = [
   "overview",
@@ -46,18 +64,13 @@ function parsePage(path: string): Page {
   return (PAGES as readonly string[]).includes(page) ? (page as Page) : "overview";
 }
 
-const SETTINGS = {
-  account: ["Account", "Your profile, password, two-step verification and where you are signed in."],
-  members: [
-    "Members",
-    "Who can manage this Identity, and with which role. Viewers see everything; editors also change groups; admins also manage applications, providers, members and tokens. People with the User role only sign in to applications.",
-  ],
-  signin: [
-    "Sign-in",
-    "Identity providers people can sign in to Identity with, such as Keycloak or Microsoft Entra ID, and which of their groups give which role.",
-  ],
-  tokens: ["API tokens", "For scripts. Each token has one role and an expiry; the secret is shown once."],
-} as const;
+const SETTINGS = (t: T) =>
+  ({
+    account: [t("settings.account"), t("settings.accountText")],
+    members: [t("settings.members"), t("settings.membersText")],
+    signin: [t("settings.signin"), t("settings.signinText")],
+    tokens: [t("settings.tokens"), t("settings.tokensText")],
+  }) as const;
 
 // An application sent someone here to sign in (/?return=/interaction/<uid>, or /saml/continue/<id> for SAML): once
 // they are signed in, they go back.
@@ -81,14 +94,39 @@ function keepReturn() {
 }
 keepReturn();
 
+// A product sent someone here for their account or its members (?from=<the product's page>, @openasy/auth 0.11.1):
+// the page offers the way back while they are here. Only to a product of this install, so the link goes nowhere else.
+const FROM = "openasy-identity-from";
+function keepFrom() {
+  const url = new URL(location.href);
+  const from = url.searchParams.get("from");
+  if (!from) return;
+  if (/^https?:\/\//.test(from)) sessionStorage.setItem(FROM, from);
+  url.searchParams.delete("from");
+  history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+}
+keepFrom();
+const originOf = (url: string) => {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+};
+
 function Product() {
   const t = useT();
   const [theme, setTheme] = useThemePreference();
+  const [, setLocale] = useLocalePreference();
   const { me, can, signOut } = useAuth();
+  const account = useAccountMenu();
   const call = useApi();
+  const onSearch = useMemo(() => search(call, t), [call, t]);
   const page = parsePage(usePath());
   const [returning] = useState(() => sessionStorage.getItem(RETURN));
   const [products, setProducts] = useState<Array<ProductLink & { id: ProductId }>>([]);
+  const [from, setFrom] = useState(() => sessionStorage.getItem(FROM));
+  const back = from ? products.find((p) => originOf(p.url) === originOf(from)) : undefined;
   // What the application's groups ask for: a session with a second factor (or a passkey, or through an identity
   // provider), or one with a passkey.
   const asked = sessionStorage.getItem(MFA);
@@ -106,13 +144,12 @@ function Product() {
   // The install's other products (OPENASY_PRODUCTS), for the switcher; ids this UI does not know are left out.
   const manages = can("viewer");
   useEffect(() => {
-    if (!manages) return;
     void call<{ products: ProductLink[] }>("/api/v1/products").then(
       (r) =>
         setProducts(r.products.filter((p): p is ProductLink & { id: ProductId } => p.id !== "identity" && (PRODUCT_IDS as readonly string[]).includes(p.id))),
       () => {},
     );
-  }, [call, manages]);
+  }, [call]);
 
   if (returning && !waitForFactor) return null;
   const shown: Page = waitForFactor || !manages ? "account" : page;
@@ -142,20 +179,36 @@ function Product() {
   return (
     <AppShell
       product="identity"
+      // People who only sign in to applications cannot read the directory, so they search pages alone.
+      onSearch={manages ? onSearch : undefined}
       about={colophon}
       nav={nav}
       activeNav={shown}
       onNavigate={(id) => navigate(`/${id}`)}
-      connectedProducts={products.map((p) => p.id)}
+      connectedProducts={manages ? products.map((p) => p.id) : []}
       onSwitchProduct={(id) => {
         const to = products.find((p) => p.id === id);
         if (to) window.location.assign(to.url);
       }}
-      footerNav={footerNav}
-      user={{ name: me.user.name, role: roleName }}
+      footerNav={account.settings(footerNav)}
+      user={{ name: me.user.name, role: roleName, ...account.user }}
       theme={theme}
       onThemeChange={setTheme}
+      onLanguageChange={(code) => setLocale(toLocale(code))}
     >
+      {back && (
+        <Callout
+          tone="info"
+          title={t("product.youCameFrom", { product: PRODUCTS[back.id].name })}
+          action={
+            <Button size="sm" icon={<ArrowLeft />} onClick={() => location.assign(from!)}>
+              {t("product.backTo", { product: PRODUCTS[back.id].name })}
+            </Button>
+          }
+          onDismiss={() => (sessionStorage.removeItem(FROM), setFrom(null))}
+          className="mb-3"
+        />
+      )}
       {shown === "about" ? null : shown === "overview" ? (
         <OverviewPage call={call} />
       ) : shown === "audit" ? (
@@ -183,8 +236,8 @@ function Product() {
       ) : (
         <>
           <PageHeader
-            title={manages ? SETTINGS[shown][0] : t("product.yourAccount")}
-            description={manages ? SETTINGS[shown][1] : t("product.youSignInToYour")}
+            title={manages ? SETTINGS(t)[shown][0] : t("product.yourAccount")}
+            description={manages ? SETTINGS(t)[shown][1] : t("product.youSignInToYour")}
             actions={
               shown === "account" && (
                 <Button icon={<LogOut />} onClick={() => void signOut()}>
@@ -213,9 +266,10 @@ function Product() {
 export function App() {
   const installBrand = useInstallBrand();
   const [theme] = useThemePreference();
+  const [locale] = useLocalePreference();
   return (
     // The install's brand from config/brand.env (ADR 0053); OpenAsy's own look where it sets none.
-    <BrandProvider theme={theme} brand={{ name: "OpenAsy", organization: undefined, ...installBrand }} className="min-h-screen">
+    <BrandProvider theme={theme} locale={locale} brand={{ name: "OpenAsy", organization: undefined, ...installBrand }} className="min-h-screen">
       <AuthGate product="OpenAsy Identity">
         <Product />
       </AuthGate>
