@@ -40,7 +40,7 @@ import { AuditPage, OverviewPage } from "./overview.tsx";
 import { PeoplePage } from "./people.tsx";
 import { ProvisioningPage } from "./provisioning.tsx";
 import { useApi } from "./shared.tsx";
-import { useT, type T } from "./i18n.ts";
+import { useT, type T, setViewerLocale } from "./i18n.ts";
 import { search } from "./search.ts";
 
 export const PAGES = [
@@ -267,6 +267,7 @@ export function App() {
   const installBrand = useInstallBrand();
   const [theme] = useThemePreference();
   const [locale] = useLocalePreference();
+  setViewerLocale(locale);
   return (
     // The install's brand from config/brand.env (ADR 0053); OpenAsy's own look where it sets none.
     <BrandProvider theme={theme} locale={locale} brand={{ name: "OpenAsy", organization: undefined, ...installBrand }} className="min-h-screen">

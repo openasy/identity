@@ -2,7 +2,7 @@ import { Button, Callout, PageHeader, Panel, useAgo } from "@openasy/ui";
 import { KeyRound, Power } from "lucide-react";
 import { useState } from "react";
 import { Code, Problem, useAction, useData, type Call } from "./shared.tsx";
-import { useT } from "./i18n.ts";
+import { useT, viewerLocale } from "./i18n.ts";
 
 interface Provisioning {
   url: string;
@@ -26,7 +26,10 @@ export function ProvisioningPage({ call }: { call: Call }) {
         title="SCIM"
         description={
           on
-            ? t("provisioningPage.onSinceLastRequest", { value: new Date(data!.tokenCreatedAt!).toLocaleDateString(), ago: ago(data!.lastUsedAt) })
+            ? t("provisioningPage.onSinceLastRequest", {
+                value: new Date(data!.tokenCreatedAt!).toLocaleDateString(viewerLocale()),
+                ago: ago(data!.lastUsedAt),
+              })
             : t("provisioningPage.offMakeATokenTo")
         }
       >
@@ -69,7 +72,7 @@ export function ProvisioningPage({ call }: { call: Call }) {
         </div>
       </Panel>
       <Panel title={t("provisioningPage.atTheProvider")}>
-        <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 text-sm">
+        <ul className="m-0 flex list-disc flex-col gap-1.5 ps-5 text-sm">
           <li>{t("provisioningPage.oktaInTheAppProvisioning")}</li>
           <li>{t("provisioningPage.microsoftEntraIdInThe")}</li>
           <li>{t("provisioningPage.peopleProvisionedThisWaySign")}</li>

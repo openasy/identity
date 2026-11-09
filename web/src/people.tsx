@@ -4,7 +4,7 @@ import { Check, UserPlus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { Person } from "./api.ts";
 import { Code, List, Problem, useAction, useData, type Call } from "./shared.tsx";
-import { useT, type T } from "./i18n.ts";
+import { useT, type T, viewerLocale } from "./i18n.ts";
 
 const ROLE = (t: T): Record<Person["role"], string> => ({
   user: t("roles.user"),
@@ -73,7 +73,7 @@ export function PeoplePage({ call }: { call: Call }) {
           icon={<Check aria-hidden className="size-4" />}
           iconTone="success"
           title={t("peoplePage.invitationFor", { email: link.email })}
-          description={t("peoplePage.sendThisLinkToThem", { value: new Date(link.expiresAt).toLocaleString() })}
+          description={t("peoplePage.sendThisLinkToThem", { value: new Date(link.expiresAt).toLocaleString(viewerLocale()) })}
           footer={
             <Button variant="primary" onClick={close}>
               {t("peoplePage.done")}

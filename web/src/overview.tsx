@@ -20,7 +20,7 @@ import { Ban, CircleX, LogIn, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import type { AuditEvent, Overview } from "./api.ts";
 import { List, useData, type Call } from "./shared.tsx";
-import { useT, type T } from "./i18n.ts";
+import { useT, type T, viewerLocale } from "./i18n.ts";
 
 const EVENT_NAMES = (t: T): Record<string, string> => ({
   "app-sign-in": t("eventNames.signedInToAnApplication"),
@@ -56,7 +56,7 @@ const eventColumns = (t: T, ago: (iso: string | null | undefined) => string): Co
     id: "at",
     header: t("eventcolumns.when"),
     width: "130px",
-    cell: (e) => <span title={new Date(e.at).toLocaleString()}>{ago(e.at)}</span>,
+    cell: (e) => <span title={new Date(e.at).toLocaleString(viewerLocale())}>{ago(e.at)}</span>,
     sortValue: (e) => e.at,
   },
   {
@@ -124,7 +124,7 @@ export function OverviewPage({ call }: { call: Call }) {
                 <Panel title={t("overviewPage.signInsPerHour")} description={t("overviewPage.last24HoursAllApplications")}>
                   <TimeSeriesChart
                     label={t("overviewPage.signInsPerHour")}
-                    labels={o.hourly.hours.map((h) => new Date(h).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}
+                    labels={o.hourly.hours.map((h) => new Date(h).toLocaleTimeString(viewerLocale(), { hour: "2-digit", minute: "2-digit" }))}
                     height={200}
                     stacked
                     series={[

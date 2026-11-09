@@ -3,7 +3,7 @@ import { useAuth } from "@openasy/auth/react";
 import { Copy } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api, MfaSetupRequired, Unauthorized } from "./api.ts";
-import { useT } from "./i18n.ts";
+import { useT, viewerLocale } from "./i18n.ts";
 
 /** Data loading with the session; when it ends, the sign-in screen comes back. */
 export function useApi() {
@@ -67,7 +67,7 @@ export function useAction() {
   return { run, busy, error, clear: () => setError(undefined) };
 }
 
-export const date = (iso: string) => new Date(iso).toLocaleDateString();
+export const date = (iso: string) => new Date(iso).toLocaleDateString(viewerLocale());
 
 export function Problem({ error, title }: { error?: string; title?: string }) {
   const t = useT();
