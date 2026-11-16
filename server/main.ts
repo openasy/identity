@@ -61,6 +61,9 @@ const auth = createAuth({
   oidc: oidcFromEnv(process.env, "IDENTITY_"),
   // Groups that follow an identity provider's group get their members at each sign-in.
   onOidcSignIn: (s) => directory.syncGroups(s.userId, s.provider, s.groups),
+  // The access file (OPENASY_ACCESS, ADR 0074) reads the directory's groups, whoever keeps them: by hand, LDAP, SCIM
+  // or a provider.
+  groupsOf: directory.groupsOf,
   secretsKey: kek,
   // Audit log (ADR 0013): every sign-in, failure and change to members, tokens and providers.
   onEvent: (event) => audit.record(event),
@@ -104,7 +107,11 @@ let syncing = false;
 const sync = setInterval(() => {
   if (syncing) return;
   syncing = true;
-  void directories.syncDue().finally(() => (syncing = false));
+  // Groups change by hand, from LDAP, SCIM or a provider: the access file's roles follow them within a minute.
+  void directories.syncDue().finally(() => {
+    syncing = false;
+    auth.access?.reapply();
+  });
 }, 60_000);
 
 function shutdown(signal: string) {

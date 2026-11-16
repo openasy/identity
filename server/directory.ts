@@ -405,6 +405,8 @@ export function createDirectory(db: DatabaseSync, keyring: Keyring) {
   }
 
   return {
+    /** Someone's groups by name: what applications are told, and what the access file reads (ADR 0074). */
+    groupsOf,
     listGroups,
     group,
     createGroup,
